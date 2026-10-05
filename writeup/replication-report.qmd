@@ -76,8 +76,8 @@ original_p_loss <- original$risky[original$condition == "loss"] / original$n[ori
 ## Project links
 
 - **Original paper:** Castiello, S., Pitliya, R. J., Lametti, D. R., & Murphy, R. A. (2026). Affiliation in human-AI interactions is based on shared psychological traits. *Communications Psychology, 4*, Article 93. <https://doi.org/10.1038/s44271-026-00433-8>
-- **Preregistration:** Pending. *(registered YYYY-MM-DD, before final data collection)*
-- **Live experiment:** Pending.(take the study exactly as participants did)
+- **Preregistration:** [OSF registration](https://osf.io/XXXXX) *(registered YYYY-MM-DD, before final data collection)*
+- **Live experiment:** <https://psych251.github.io/castiello2026/> (take the study exactly as participants did)
 - **Repository:** <https://github.com/psych251/castiello2026> (experiment code, data, and this report)
 :::
 

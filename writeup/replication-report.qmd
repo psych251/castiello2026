@@ -1,6 +1,6 @@
 ---
-title: "Replication of Problems 1 and 2 of Tversky & Kahneman (1981, *Science*)"
-author: "Your Name (your.email@stanford.edu)"
+title: "Replication of Experiment 3 of Castiello et al. (2026, *Communications Psychology*)"
+author: "Hazel (kaiweii@stanford.edu)"
 date: today
 date-format: long
 format:
@@ -75,37 +75,18 @@ original_p_loss <- original$risky[original$condition == "loss"] / original$n[ori
 ::: {.callout-note appearance="simple" icon=false}
 ## Project links
 
-- **Original paper:** Tversky, A., & Kahneman, D. (1981). The framing of decisions and the
-  psychology of choice. *Science, 211*(4481), 453–458. <https://doi.org/10.1126/science.7455683>
-- **Preregistration:** [OSF registration](https://osf.io/XXXXX) *(registered YYYY-MM-DD, before final data collection)*
-- **Live experiment:** <https://psych251.github.io/your-repo/> (take the study exactly as participants did)
-- **Repository:** <https://github.com/psych251/your-repo> (experiment code, data, and this report)
+- **Original paper:** Castiello, S., Pitliya, R. J., Lametti, D. R., & Murphy, R. A. (2026). Affiliation in human-AI interactions is based on shared psychological traits. *Communications Psychology, 4*, Article 93. <https://doi.org/10.1038/s44271-026-00433-8>
+- **Preregistration:** Pending. *(registered YYYY-MM-DD, before final data collection)*
+- **Live experiment:** Pending.(take the study exactly as participants did)
+- **Repository:** <https://github.com/psych251/castiello2026> (experiment code, data, and this report)
 :::
 
 # AI use statement
 
-::: {.callout-tip icon=false}
-## Guidance
-
-This statement comes first so a reader knows how the work was produced before reading it. Keep
-it current from the start of the project rather than reconstructing it at the end.
-
-**Course policy: you write all of the text in this report yourself.** AI tools may help with
-code, and may comment on drafts you have written, but they may not write, rewrite or paraphrase
-any of the report's text. That includes "polishing" a paragraph.
-
-List every AI tool you used on this project, what you used it for, and how you checked what it
-produced. Include coding assistants (for example Claude Code, Codex, Copilot) and chat
-assistants. Name the model and version where you know it. "How you checked" is the important
-column: say what you verified yourself, not that the output "looked right". If you used no AI
-tools, replace the table with a sentence saying so.
-:::
-
 | Tool and model | What it was used for | How you checked the output |
 |---|---|---|
-| *e.g., Claude Code (Claude Opus 5)* | *Implemented the experiment from the original Methods section* | *Ran the automated tests; took the study myself; compared every screen with the original materials* |
-| *e.g., Claude Code (Claude Opus 5)* | *Drafted the analysis code* | *Checked the exclusion counts by hand; confirmed the key test matches the preregistration* |
-| *e.g., ChatGPT* | *Comments on my draft of the Introduction (no text generated)* | *Decided which comments to act on and made every change myself; checked any factual claim against the source* |
+| Claude Code (Claude Opus 5) | Used it to check why one repo isn't set up for SSH | 
+| ChatGPT (ChatGPT-6 sol max) | Used it to browse and compare potential papers | Understand Castiello et al.’s work | Clarify some proposal instructions | Provided outline and bullet points for the introduction part |
 
 I wrote all of the text in this report myself. AI tools were not used to write, rewrite or
 paraphrase it, and were not used to generate, alter, or impute any participant data. I take full
@@ -237,14 +218,9 @@ bind_rows(
 
 ## Introduction
 
-::: {.callout-tip icon=false}
-## Guidance
+I am interested in if an AI built from dataset of any person's life till now can help them understand who they really are and even serve as a useful counterpart for future decisions, hence I found Castiello et al's research that discussed whether people’s psychological traits change their experience with AI interaction and decided to replicate Experiment 3 from it. This experiment specifically checked whether people feel a stronger connection to an AI chatbot when its conversational style feels similar to their own personality. In this study, 100 participants were invited to complete a 44-item Big Five personality questionnaire and then asked to chat with two versions of GPT-4.1, in which one version was prompted to reflect each participant’s personality profile while the other one reflected the opposite profile. Participants rated their feelings toward both chatbots after the conversations and were found out that the affiliation scores were higher for the personality-matched chatbot, t(99) = 5.66, p < .001.
 
-One or two paragraphs, no abstract and no literature review: that is in the original paper.
-Say what the original study found, which specific finding you are replicating, and why it
-matters to you. Write the Introduction and Methods in the past tense, even though you write
-them before collecting data.
-:::
+For my replication, I recruited people on Prolific and had them complete the same Big Five questionnaire before chatting with two AI personas. I used the paper's personality-prompt structure to create the matched and opposite profile for each participant. The key test I preregistered was a paired-samples t test that compared each participant’s affiliation score for the matched chatbot with their score for the opposite-profile chatbot. A possible extension would be either upgrading prompt and model that participants talk to or letting participants choose which chatbot to have an additional conversation with, which adds a behavioral choice to the original self-report ratings. I think the main challenge is to assign each chatbot with the correct personality prompt yet without exposing participants’ responses or the model API key. The authors used a different platform for the conversations, so I need to check that my implementation follows their procedure closely and describe any differences in the final report.
 
 ## Methods
 

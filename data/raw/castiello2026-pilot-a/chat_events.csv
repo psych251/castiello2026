@@ -1,0 +1,2 @@
+participant_id,type,chat_index,seq,attempt,code,ms,message,model_provider,model_id
+pilotA-02,model_failure,2,5,1,http_504,42487,Gemini request failed (HTTP 504),gemini,gemini-3.8-flash

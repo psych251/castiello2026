@@ -51,6 +51,9 @@ library(jsonlite)
 # Phase 2 runs under its own id, so its data never mix with Phase 1's.
 experiment_id        <- "castiello2026-pilot-a"
 experiment_id_phase2 <- "castiello2026-phase2"
+# Label for Phase 1 results in tables and figures: pilot data (run by the researcher and
+# non-naive testers) are never labelled as the replication sample.
+phase1_label <- if (grepl("pilot", experiment_id)) "Pilot A (non-naive testers)" else "Phase 1: replication"
 ```
 
 ```{r}
@@ -90,11 +93,11 @@ prereg_d <- 0.3
 
 | Tool and model | What it was used for | How you checked the output |
 |---|---|---|
-| Claude Code (Claude Opus 5) | Used it to check why one repo isn't set up for SSH | I checked the repo result afterwards |
-| ChatGPT (ChatGPT-6 sol max) | Used it to browse and compare potential papers, understand Castiello et al.’s work, clarify some proposal instructions and provide outline and bullet points for the introduction part. | I read the paper myself and wrote the proposal with guidance. |
-| Claude Code (Claude Opus 5) | Used it to implement the experiment, personality scoring, chat service, Firebase backend, Gemini connection, data export, and automated tests. | After the paticipants' interface was set up, I reviewed it through local walkthroughs with synthesized responses. |
-| Claude Code (Claude Opus 5) | Used it to implement the report’s R analysis code, including exclusions, paired comparisons, effect sizes, figures, power calculations, and model response-time summaries. | I checked the code with simulated data first and then actual pilot A data. |
-| ChatGPT (ChatGPT-6 sol max) | Used it to walk me through statistical concepts, plan the replication, and provide bullet points for report sections. | I used it as reference to write the report myself. |
+| Claude Code (Claude Opus 5.5) | Used it to check why one repo isn't set up for SSH | I checked the repo result afterwards |
+| ChatGPT (ChatGPT-6 Astra max) | Used it to browse and compare potential papers, understand Castiello et al.’s work, clarify some proposal instructions and provide outline and bullet points for the introduction part. | I read the paper myself and wrote the proposal with guidance. |
+| Claude Code (Claude Opus 5.5) | Used it to implement the experiment, personality scoring, chat service, Firebase backend, Gemini connection, data export, and automated tests. | After the paticipants' interface was set up, I reviewed it through local walkthroughs with synthesized responses. |
+| Claude Code (Claude Opus 5.5) | Used it to implement the report’s R analysis code, including exclusions, paired comparisons, effect sizes, figures, power calculations, and model response-time summaries. | I checked the code with simulated data first and then actual pilot A data. |
+| ChatGPT (ChatGPT-6 Astra max) | Used it to walk me through statistical concepts, plan the replication, and provide bullet points for report sections. | I used it as reference to write the report myself. |
 
 I wrote all of the text in this report myself. AI tools were not used to write, rewrite or
 paraphrase it, and were not used to generate, alter, or impute any participant data. I take full
@@ -132,7 +135,10 @@ read_phase <- function(id) {
   messages     <- read_opt("messages.csv")   # chat timing and length, no text
   chat_events  <- read_opt("chat_events.csv")   # failed model attempts, no text
 
-  complete <- participants |> filter(as.logical(completed) %in% TRUE)
+  # Completed = clicked "Finish" on the debrief, or reached the affiliation ratings (saved only
+  # after both chats) and closed the page before finishing; the debrief collects no data.
+  rated <- trials |> filter(task == "affiliation") |> pull(participant_id) |> unique()
+  complete <- participants |> filter(as.logical(completed) %in% TRUE | participant_id %in% rated)
 
   bfi <- trials |>
     filter(task == "bfi") |>
@@ -266,7 +272,7 @@ fmt_row <- function(study, r) {
 }
 bind_rows(
   fmt_row("Original", original),
-  fmt_row("Phase 1: replication", if (have_data) paired_stats(phase1)),
+  fmt_row(phase1_label, if (have_data) paired_stats(phase1)),
   fmt_row("Phase 2: extension", if (have_phase2) paired_stats(phase2))
 ) |>
   knitr::kable(align = "lrrrrrr",
@@ -307,19 +313,19 @@ knitr::kable(power_rows,
 
 ### Planned sample
 
-My planned sample size was the same with orginal study's sample size (N = 100) given the budget constraint. They should also be at least 18 years old and native in English. The eligibility was established through Prolific's prescreening filters so that a survey wasn't required. Recruitment would stop when 100 unique participants had completed the study.
+My planned sample size was the same with orginal study's sample size (N = 100) given the budget constraint. They should also be at least 18 years old, native in English, and able to complete the study on a desktop or laptop computer. Phones and tablets are blocked before consent. The eligibility was established through Prolific's prescreening filters so that a survey wasn't required. Recruitment would stop when 100 unique participants had completed the study.
 
 ### Materials
 
-Participants' personalities were assessed using the 44-item Big Five Inventory which measured Openness, Conscientiousness, Extraversion, Agreeableness and Neuroticism by asking them to rate each item on a five-point agreement scale. Before computing the means for each trait, reverse-coded items were recorded. After completing item 22, an instructed-response attention check was presented asking participants to select "Disagree." The personality instructions applied in this study were identical to those used in Experiment 3 of Castiello et al. (2026). For each participant, the mirror profile was based upon the five calculated trait means; whereas, the inverse profile was based upon six minus each corresponding mean. These profiles were used to direct the conversational style of the two chatbots via prompts as opposed to further model training. 
+Participants' personalities were assessed using the 44-item Big Five Inventory which measured Openness, Conscientiousness, Extraversion, Agreeableness and Neuroticism by asking them to rate each item on a five-point agreement scale. Before computing the means for each trait, reverse-coded items were recoded. After completing item 22, an instructed-response attention check was presented asking participants to select "Disagree." The personality instructions applied in this study were identical to those used in Experiment 3 of Castiello et al. (2026). For each participant, the mirror profile was based upon the five calculated trait means; whereas, the inverse profile was based upon six minus each corresponding mean. These profiles were used to direct the conversational style of the two chatbots via prompts as opposed to further model training. 
 
-Both chatbots were based upon Gemini 3.8 Flash, and were configured with the provider’s default generation settings, including a medium thinking level. Each chatbot had its own unique conversation history. The personality instructions was provided to each chatbot via the backend as opposed to being shown in the chat interface. A hidden startup instruction ("Start a casual conversation with a friend") was used to begin every conversation. Affiliation was measured using six post-chat ratings for each chatbot. Ratings were coded from -2 to +2, and the distance and difference items were reverse-scored. The mean of the answered items was used to create an affiliation score for each chatbot. Higher scores indicated greater affiliation.
+Both chatbots were based upon Gemini 3.8 Flash, and were configured with the provider’s default generation settings. Each chatbot had its own unique conversation history. The personality instructions was provided to each chatbot via the backend as opposed to being shown in the chat interface. A hidden startup instruction ("Begin this first conversation with a brief，casual greeting. Do not refer to previous conversations or shared experiences with this person") was used to begin every conversation. Affiliation was measured using six post-chat ratings for each chatbot. Ratings were coded from -2 to +2, and the distant and different items were reverse-scored. The mean of the answered items was used to create an affiliation score for each chatbot. Higher scores indicated greater affiliation.
 
 ### Procedure
 
 Participants began by reading the consent information and stating if they wish to participate. Then they completed the personality questionnaire and attention check, after which they received instructions on how to converse with the AI chatbots. Participants were reminded that they were conversing with AI chatbots called Pat and Alex; however, the relationship between each chatbot and the personality conditions wasn't revealed prior to rating.
 
-Participants then started two separate conversations with the two chatbots. The order of the mirror and inverse conditions and the name assigned to each condition were randomly determined. The conversations were initiated by chatbots and consist of 24 visible messages (12 from the chatbot and 12 from the participant) that concluded after the participant's last message. Following both conversations, participants were asked to provide affiliation ratings for each chatbot and chose to answer demographic questions. Participants were then debriefed regarding the personality manipulation and clicked "Finish" to submit their responses.
+Participants then started two separate conversations with the two chatbots. The order of the mirror and inverse conditions and the name assigned to each condition were randomly determined. The conversations were initiated by chatbots and consist of 24 visible messages (12 from the chatbot and 12 from the participant) that concluded after the participant's last message. Following both conversations, participants were asked to provide affiliation ratings for each chatbot and chose to answer demographic questions. Participants were then debriefed regarding the personality manipulation and clicked "Finish" to submit their responses. Nevertheless, the code counts as completed anyone who reached the ratings.
 
 ### Analysis plan
 
@@ -387,10 +393,14 @@ keep         <- phase1$keep
 ```{r}
 #| label: funnel
 #| eval: !expr have_data
-funnel_levels <- c("Started", "Completed", "Passed exclusion criteria")
+# "Clicked Finish" counts the saved completion flags as recorded (never altered); "Completed"
+# applies the revised rule in read_phase() (clicked Finish, or reached the affiliation ratings).
+funnel_levels <- c("Started", "Clicked Finish (recorded)", "Completed (reached ratings)", "Passed exclusion criteria")
+finished <- participants |> filter(as.logical(completed) %in% TRUE)
 bind_rows(
   participants |> mutate(step = "Started"),
-  complete     |> mutate(step = "Completed"),
+  finished     |> mutate(step = "Clicked Finish (recorded)"),
+  complete     |> mutate(step = "Completed (reached ratings)"),
   keep         |> mutate(step = "Passed exclusion criteria")
 ) |>
   mutate(step = factor(step, levels = funnel_levels),
@@ -414,8 +424,8 @@ scores |>
 #| eval: !expr have_data
 #| echo: false
 #| results: asis
-cat(sprintf("Of %d participants who started, %d completed the study and %d met the exclusion criteria.",
-            nrow(participants), nrow(complete), nrow(keep)))
+cat(sprintf("Of %d participants who started, %d clicked Finish, %d completed the study (reached the affiliation ratings) and %d met the exclusion criteria.",
+            nrow(participants), sum(as.logical(participants$completed) %in% TRUE), nrow(complete), nrow(keep)))
 if (nrow(keep) < 2) cat(" Fewer than two participants remain for analysis, so the results below are empty.")
 cat("\n")
 ```
@@ -512,7 +522,7 @@ orig <- original
 rep  <- paired_stats(phase1)
 
 if (!is.null(rep) && !is.na(rep$d)) {
-  bind_rows(orig |> mutate(Study = "Original"), rep |> mutate(Study = "Phase 1: replication")) |>
+  bind_rows(orig |> mutate(Study = "Original"), rep |> mutate(Study = phase1_label)) |>
     transmute(Study, N,
               `d_z` = sprintf("%.2f", d),
               `95% CI` = sprintf("[%.2f, %.2f]", d_low, d_high),
@@ -578,7 +588,7 @@ caption. If the original reported no variability, say so rather than leaving it 
 #| fig-cap: "Mirror minus inverse affiliation as an effect size (d_z, 95% CI), original study and Phase 1 replication. The original values are from the paper's text (p. 7); it does not report the condition means."
 #| fig-width: 7
 #| fig-height: 2.5
-comparison_plot(Original = original, `Phase 1: replication` = paired_stats(phase1))
+do.call(comparison_plot, setNames(list(original, paired_stats(phase1)), c("Original", phase1_label)))
 # To show the original's Fig. 4A next to this (the original reports no means to replot), save a
 # screenshot as writeup/images/original-figure.png and lay the two out with
 # ::: {layout-ncol=2} as described in the guidance box above.
@@ -856,9 +866,8 @@ if (!is.null(p2_stats) && !is.na(p2_stats$t)) {
 #| fig-cap: "Mirror minus inverse affiliation as an effect size (d_z, 95% CI): original study, Phase 1 replication, and Phase 2 extension."
 #| fig-width: 8
 #| fig-height: 3
-comparison_plot(Original = original,
-                `Phase 1: replication` = if (have_data) paired_stats(phase1),
-                `Phase 2: extension` = paired_stats(phase2))
+do.call(comparison_plot, setNames(list(original, if (have_data) paired_stats(phase1), paired_stats(phase2)),
+                                  c("Original", phase1_label, "Phase 2: extension")))
 ```
 
 ## Discussion

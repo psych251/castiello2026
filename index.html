@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Psych 251 experiment</title>
+  <title>Chatbot study</title>
   <!-- Empty icon: without this the browser requests /favicon.ico and logs a red 404 on the
        first load of every session, which competes with real errors in a student's console. -->
   <link rel="icon" href="data:,">
@@ -16,6 +16,7 @@
   <script src="lib/plugin-survey.js"></script>
   <script src="lib/plugin-survey-likert.js"></script>
   <script src="lib/plugin-survey-text.js"></script>
+  <script src="src/plugin-live-chat.js"></script>
   <link rel="stylesheet" href="lib/jspsych.css">
   <link rel="stylesheet" href="lib/plugin-survey.css">
 
@@ -23,6 +24,10 @@
   <script src="lib/firebase-bundle.js"></script>
   <script src="firebase-config.js"></script>
   <script src="src/save.js"></script>
+  <!-- Study logic shared with the chat service: it lives in server/ because that folder is what
+       Firebase deploys as the Cloud Function. -->
+  <script src="server/castiello.js"></script>
+  <script src="src/chat-client.js"></script>
 
   <link rel="stylesheet" href="src/experiment.css">
 </head>

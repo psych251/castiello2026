@@ -21,7 +21,7 @@ skills in `.claude/skills/` for the detailed procedures.
 - `writeup/replication-report.qmd` is the replication report (Quarto), covering Phase 1 (the
   replication) and Phase 2 (the extension). Its results sections are the analysis: they read the
   exported CSVs, so there is no separate analysis file. Both phases use the shared functions
-  under "Key statistics" (`read_phase`, `risky_counts`, `diff_ci`, `comparison_plot`), so the
+  under "Key statistics" (`read_phase`, `paired_stats`, `comparison_plot`, `affiliation_plot`), so the
   exclusion rule and key comparison are defined once. It must render with no data, with Phase 1
   only, and with both phases.
 - Phase 2 runs under its own `EXPERIMENT.id`; `experiment_id_phase2` in the report must match.
@@ -35,9 +35,11 @@ skills in `.claude/skills/` for the detailed procedures.
 
 ## Commands
 - `npm start` serves the site at http://localhost:8000 (needed: `file://` won't work for Firebase).
-- `npm test` runs the emulator + Playwright end to end (10 tests). Run it before every push.
+- `npm test` runs the emulator + Playwright end to end (36 tests). Run it before every push.
   It installs a test browser on first use; needs Java 17+ for the emulator.
 - `npm run export -- --experiment <id>` exports data.
+- `npm run operator -- --key <path>` (or `--emulator`) runs the researcher's chat-relay dashboard
+  (`scripts/operator.js`) for the manual relay used in Pilot A.
 - `npm run vendor` and `npm run bundle:firebase` refresh `lib/` after dependency upgrades.
 
 ## Boundaries

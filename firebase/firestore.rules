@@ -8,6 +8,10 @@ rules_version = '2';
 //   3. Nobody can READ anything from the browser. You read your data with
 //      scripts/export.js, which uses the Admin SDK and bypasses these rules.
 //
+// The chat service (server/) also uses the Admin SDK. Its private records (each participant's
+// bot assignment, scores, prompts and both sides of the chats) are closed to every browser,
+// including the participant's own, so nobody can learn their condition from the database.
+//
 // Do NOT loosen these to `allow read, write: if true` while debugging. Use the
 // emulator (`npm run emulators`) instead; it logs every denied request.
 
@@ -47,6 +51,18 @@ service cloud.firestore {
       match /trials/{chunkId} {
         allow create: if isOwner(participantId) && reasonableSize();
         allow read, update, delete: if false;
+      }
+
+      // Chat service records, written only by the service (Admin SDK). Listed here to make
+      // the point explicit; the catch-all at the bottom would close them anyway.
+      match /private/{doc} {
+        allow read, write: if false;
+      }
+      match /chat/{messageId} {
+        allow read, write: if false;
+      }
+      match /chat_events/{eventId} {
+        allow read, write: if false;
       }
     }
 

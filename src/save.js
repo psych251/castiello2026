@@ -117,6 +117,7 @@
       );
       this.mode = "offline";
       this.reason = "";
+      this.user = null;     // the signed-in Firebase user (for getIdToken)
       this.uid = null;      // anonymous auth id: the browser
       this.runId = makeRunId(); // this page load
       this.docId = null;    // "<uid>-<runId>": the participant document for this run
@@ -163,6 +164,7 @@
           fb.connectFirestoreEmulator(db, this.opts.emulator_host, 8080);
         }
         const cred = await withTimeout(fb.signInAnonymously(auth), AUTH_TIMEOUT_MS, "anonymous sign-in");
+        this.user = cred.user;
         this.uid = cred.user.uid;
         this.docId = this.uid + "-" + this.runId;
         this.db = db;
@@ -263,8 +265,10 @@
     /**
      * Call from jsPsych's on_finish. Flushes remaining trials, marks the participant
      * complete, waits for all writes, and returns { ok, mode, failed }.
+     * `fields` are merged into the final update; pass { completed: false, ended_early: why }
+     * when the study stopped before the end, so the session is not counted as complete.
      */
-    async finish(jsPsych) {
+    async finish(jsPsych, fields) {
       const full = jsPsych ? jsPsych.data.get().json() : JSON.stringify(this.allTrials);
       if (this.mode !== "offline") {
         this.flush();
@@ -275,6 +279,7 @@
           n_trials: this.trialCount,
           n_chunks: this.chunkIndex,
         };
+        Object.assign(update, sanitize(fields || {}));
         if (this.opts.save_full_data_at_end) {
           if (full.length < MAX_FULL_DATA_BYTES) update.full_data = full;
           else update.full_data_omitted = "too large (" + full.length + " bytes)";
@@ -298,6 +303,15 @@
       if (!ok) this._offerDownload(jsPsych, full);
       return { ok: ok, mode: this.mode, failed: failed, uid: this.uid, participant_id: this.docId,
                stats: Object.assign({}, this.stats) };
+    }
+
+    /**
+     * The participant's sign-in token, for the chat service (src/chat-client.js). The service
+     * checks it to know whose session a request belongs to.
+     */
+    getIdToken() {
+      if (!this.user) return Promise.reject(new Error("not signed in (" + this.mode + " mode)"));
+      return this.user.getIdToken();
     }
 
     /** Report an error to the errors collection (also used for uncaught errors). */

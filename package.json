@@ -6,13 +6,15 @@
   "license": "MIT",
   "scripts": {
     "start": "node scripts/serve.js",
-    "emulators": "firebase emulators:start --only auth,firestore --project demo-psych251",
-    "test": "firebase emulators:exec --only auth,firestore --project demo-psych251 \"playwright test\"",
+    "predev": "node scripts/check-server-deps.js",
+    "dev": "firebase emulators:exec --only auth,firestore,functions --project demo-psych251 \"node scripts/dev.js\"",
+    "emulators": "firebase emulators:start --only auth,firestore,functions --project demo-psych251",
+    "test": "firebase emulators:exec --only auth,firestore,functions --project demo-psych251 \"playwright test\"",
     "export": "node scripts/export.js",
     "vendor": "node scripts/vendor.js",
     "bundle:firebase": "esbuild scripts/firebase-entry.js --bundle --format=iife --global-name=firebaseBundle --minify --outfile=lib/firebase-bundle.js",
-    "pretest": "node scripts/check-browsers.js",
-    "setup": "npm install && node scripts/check-browsers.js"
+    "pretest": "node scripts/check-browsers.js && node scripts/check-server-deps.js",
+    "setup": "npm install && npm --prefix server install && node scripts/check-browsers.js"
   },
   "dependencies": {
     "firebase-admin": "^13.0.0"

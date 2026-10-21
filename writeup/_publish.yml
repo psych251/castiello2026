@@ -1,0 +1,4 @@
+- source: replication-report.qmd
+  posit-connect-cloud:
+    - id: 01a10a5b-33f1-91fc-e443-cfa91918eb7f
+      url: https://connect.posit.cloud/haazzzzzzzeel/content/01a10a5b-33f1-91fc-e443-cfa91918eb7f

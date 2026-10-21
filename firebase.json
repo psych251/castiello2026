@@ -3,10 +3,32 @@
     "rules": "firebase/firestore.rules",
     "indexes": "firebase/firestore.indexes.json"
   },
+  "functions": [
+    {
+      "source": "server",
+      "codebase": "chat",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "*.log",
+        ".env.local",
+        "package-lock.json.bak"
+      ]
+    }
+  ],
   "emulators": {
-    "auth": { "port": 9099 },
-    "firestore": { "port": 8080 },
-    "ui": { "enabled": false },
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "functions": {
+      "port": 5001
+    },
+    "ui": {
+      "enabled": false
+    },
     "singleProjectMode": true
   }
 }

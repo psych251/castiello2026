@@ -11,5 +11,6 @@ export {
   addDoc,
   getDoc,
   serverTimestamp,
+  onSnapshot,
   connectFirestoreEmulator,
 } from "firebase/firestore";

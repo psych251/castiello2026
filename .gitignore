@@ -21,6 +21,8 @@ keys.json
 secret*.json
 .env
 .env.*
+# ...except the chat service's emulator settings, which hold no secrets (see the file).
+!server/.env.local
 
 # Firebase CLI local state
 .firebase/
@@ -51,6 +53,8 @@ original_paper/
 # part of the record and belongs in the repository, like the CSVs. Check it for anything
 # identifying before committing, exactly as you would the free-text columns.
 identifiers.csv
+# Chat text typed by participants (Castiello relay chat): may contain identifying details.
+transcripts.csv
 
 # OS / editor
 .DS_Store

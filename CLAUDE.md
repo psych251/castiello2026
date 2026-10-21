@@ -14,6 +14,27 @@ skills in `.claude/skills/` for the detailed procedures.
   `saver.uid`) wherever a participant id is needed, including
   `jsPsych.data.addProperties`, or trials will not join to participants on export.
 - `firebase-config.js` is the pasted web-app config. It is public by design.
+- `server/` is the chat service, deployed as one Cloud Function (`firebase.json` "functions"
+  source; its own `package.json` and `node_modules`): `index.js` (the function), `http.js`
+  (CORS, errors), `core.js` (BFI scoring, mirror/inverse assignment, prompts, turn order,
+  retries, usage limits), `models.js` (picks the model: the simulated one, emulators only, or
+  Gemini; an unset, unknown or incomplete provider is a 503 "model_not_configured", never
+  simulated replies), `gemini.js` (the Gemini connection via @google/genai; Developer API key in
+  the `GEMINI_API_KEY` Firebase secret, or Vertex AI as the function's service account; the SDK's
+  own retries are off; logs never hold prompts, chat text or keys; `server/live.env.example` is
+  the template for the deployed settings),
+  `config.js` (chat length, allowed study ids and session caps, hosting), `castiello.js` (items,
+  scoring keys and prompt, shared with the page, which loads it from `server/`).
+  `server/.env.local` (committed, no secrets) selects the simulated model, and is read only by
+  the emulators. The browser gets only the bot names and replies; the model gets only
+  the bot's prompt and that chat's messages, never a participant id or anything derived from one.
+  Each chat stores one hidden startup instruction (seq 0, `from: "system"`, the request the
+  bot's opener answers; `OPENER_TRIGGER` in `server/castiello.js`, our wording, not the paper's,
+  changed on 2026-10-19 to stop openers inventing a shared past; see the comment there) plus the
+  24 visible messages; every message count, including the turn
+  exclusion, leaves seq 0 out, and new counts must too.
+  `src/chat-client.js` and `src/plugin-live-chat.js` are the page side. The earlier manual-relay
+  version (operator dashboard included) is kept, unwired, in `reference/manual-relay/`.
 - `firebase/firestore.rules` are create-only, keyed to the anonymous uid. Never loosen them
   to `allow read, write: if true`; debug with the emulator instead (`npm run emulators`).
 - `scripts/export.js` pulls data to CSV with the Admin SDK (needs a service-account key,
@@ -21,7 +42,7 @@ skills in `.claude/skills/` for the detailed procedures.
 - `writeup/replication-report.qmd` is the replication report (Quarto), covering Phase 1 (the
   replication) and Phase 2 (the extension). Its results sections are the analysis: they read the
   exported CSVs, so there is no separate analysis file. Both phases use the shared functions
-  under "Key statistics" (`read_phase`, `risky_counts`, `diff_ci`, `comparison_plot`), so the
+  under "Key statistics" (`read_phase`, `paired_stats`, `comparison_plot`, `affiliation_plot`), so the
   exclusion rule and key comparison are defined once. It must render with no data, with Phase 1
   only, and with both phases.
 - Phase 2 runs under its own `EXPERIMENT.id`; `experiment_id_phase2` in the report must match.
@@ -34,9 +55,20 @@ skills in `.claude/skills/` for the detailed procedures.
 - `tests/experiment.spec.js` is a Playwright robot that plays the whole experiment.
 
 ## Commands
+- `npm run dev` is the local prototype: the Auth, Firestore and Functions emulators (the chat
+  function with simulated replies, http://127.0.0.1:5001/demo-psych251/us-central1/chat) and the
+  site, all in one terminal. Stop it with Ctrl+C (Ctrl+Z leaves the ports busy). Open
+  http://localhost:8000/?emulator=1 (bare pages are redirected there, so nothing reaches live
+  Firebase). Emulator data is wiped when it stops; export it first from a second terminal with
+  `npm run export -- --experiment castiello2026-pilot-a --emulator --out <dir outside data/>`.
 - `npm start` serves the site at http://localhost:8000 (needed: `file://` won't work for Firebase).
-- `npm test` runs the emulator + Playwright end to end (10 tests). Run it before every push.
-  It installs a test browser on first use; needs Java 17+ for the emulator.
+  Without `?emulator=1` it talks to the live project, and chats stop at "cannot connect" while
+  `EXPERIMENT.chat_endpoint` is empty.
+- `npm test` runs the Auth, Firestore and Functions emulators + Playwright end to end (36 tests:
+  15 for the chat service, 4 of them Gemini with a mocked SDK or network, and 21 for the
+  experiment). No test calls a real model. Run it before every push. It installs a test
+  browser and the chat service's dependencies (`server/node_modules`) on first use; needs
+  Java 17+ for the emulator.
 - `npm run export -- --experiment <id>` exports data.
 - `npm run vendor` and `npm run bundle:firebase` refresh `lib/` after dependency upgrades.
 

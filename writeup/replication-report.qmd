@@ -49,27 +49,32 @@ library(jsonlite)
 
 # Must match EXPERIMENT.id in experiment.js, and the --experiment you passed to the export.
 # Phase 2 runs under its own id, so its data never mix with Phase 1's.
-experiment_id        <- "framing-demo"
-experiment_id_phase2 <- "framing-demo-phase2"
+experiment_id        <- "castiello2026-pilot-a"
+experiment_id_phase2 <- "castiello2026-phase2"
 ```
 
 ```{r}
 #| label: original-study
 #| include: false
 # The original study's numbers, entered once and used by the power analysis, the Key
-# statistics table, and the side-by-side figures. Replace these with your original study's
-# values, and say in a comment exactly where in the paper each one comes from.
+# statistics table, and the side-by-side figures. Only values stated in the paper are entered.
+# Page numbers are PDF pages of Castiello et al. (2026), Communications Psychology 4:93.
 #
-# Tversky & Kahneman (1981), Problem 1 (gain frame, N = 152): 72% chose the certain program,
-# 28% the risky one. Problem 2 (loss frame, N = 155): 22% certain, 78% risky. The paper
-# reports percentages, so the counts below are reconstructed from them.
+# - N = 100: Methods, "Participants" (p. 2); the preregistered paired t-test (p. 4).
+# - t(99) = 5.66, p < .001, d = 0.57 (95% CI 0.36 to 0.78); Wilcoxon signed rank test with
+#   continuity correction V = 3600, p < .001: Results, Experiment 3 (p. 7).
+# - 64% of participants affiliated more with the mirror LLM: Results, Experiment 3 (p. 7);
+#   Supplementary Fig. S5.
+# - d is the paired-difference d (d_z): 5.66 / sqrt(100) = 0.57, and the CI matches
+#   d ± 1.96 * sqrt(1/n + d^2 / (2n)).
+# - Not reported: the mirror and inverse means and SDs, and the mean difference (they appear only
+#   as a plot in Fig. 4A). They are left missing rather than read off the figure.
+# - The preregistration powered the study for d = 0.3 (AsPredicted #234956, item 7).
 original <- tibble(
-  condition = c("gain", "loss"),
-  n         = c(152, 155),
-  risky     = round(c(0.28 * 152, 0.78 * 155))
+  N = 100, mean_diff = NA_real_, t = 5.66, df = 99, p = NA_real_, p_text = "< .001",
+  d = 0.57, d_low = 0.36, d_high = 0.78, V = 3600, p_wilcox = NA_real_, prop_mirror = 0.64
 )
-original_p_gain <- original$risky[original$condition == "gain"] / original$n[original$condition == "gain"]
-original_p_loss <- original$risky[original$condition == "loss"] / original$n[original$condition == "loss"]
+prereg_d <- 0.3
 ```
 
 ::: {.callout-note appearance="simple" icon=false}
@@ -85,8 +90,11 @@ original_p_loss <- original$risky[original$condition == "loss"] / original$n[ori
 
 | Tool and model | What it was used for | How you checked the output |
 |---|---|---|
-| Claude Code (Claude Opus 5) | Used it to check why one repo isn't set up for SSH | 
-| ChatGPT (ChatGPT-6 sol max) | Used it to browse and compare potential papers | Understand Castiello et al.’s work | Clarify some proposal instructions | Provided outline and bullet points for the introduction part |
+| Claude Code (Claude Opus 5) | Used it to check why one repo isn't set up for SSH | I checked the repo result afterwards |
+| ChatGPT (ChatGPT-6 sol max) | Used it to browse and compare potential papers, understand Castiello et al.’s work, clarify some proposal instructions and provide outline and bullet points for the introduction part. | I read the paper myself and wrote the proposal with guidance. |
+| Claude Code (Claude Opus 5) | Used it to implement the experiment, personality scoring, chat service, Firebase backend, Gemini connection, data export, and automated tests. | After the paticipants' interface was set up, I reviewed it through local walkthroughs with synthesized responses. |
+| Claude Code (Claude Opus 5) | Used it to implement the report’s R analysis code, including exclusions, paired comparisons, effect sizes, figures, power calculations, and model response-time summaries. | I checked the code with simulated data first and then actual pilot A data. |
+| ChatGPT (ChatGPT-6 sol max) | Used it to walk me through statistical concepts, plan the replication, and provide bullet points for report sections. | I used it as reference to write the report myself. |
 
 I wrote all of the text in this report myself. AI tools were not used to write, rewrite or
 paraphrase it, and were not used to generate, alter, or impute any participant data. I take full
@@ -109,80 +117,130 @@ adapt its code and say so in the caption.
 #| label: analysis-functions
 #| code-summary: "Show the analysis code (shared by Phase 1 and Phase 2)"
 
-# Load one phase's exported data and apply the exclusion rule. Returns NULL if that phase
-# has not been exported yet, which is how every section below knows to skip itself.
+# Load one phase's exported data and apply the preregistered exclusion rule. Returns NULL if that
+# phase has not been exported yet, which is how every section below knows to skip itself.
 read_phase <- function(id) {
   dir <- file.path("..", "data", "raw", id)
   if (!all(file.exists(file.path(dir, c("participants.csv", "trials.csv"))))) return(NULL)
-  participants <- read_csv(file.path(dir, "participants.csv"), show_col_types = FALSE)
-  trials       <- read_csv(file.path(dir, "trials.csv"), show_col_types = FALSE)
-  errors_path  <- file.path(dir, "errors.csv")
-  errors <- if (file.exists(errors_path)) read_csv(errors_path, show_col_types = FALSE) else tibble()
+  read_opt <- function(f) {
+    p <- file.path(dir, f)
+    if (file.exists(p)) read_csv(p, show_col_types = FALSE, guess_max = 100000) else tibble()
+  }
+  participants <- read_opt("participants.csv")
+  trials       <- read_opt("trials.csv")
+  errors       <- read_opt("errors.csv")
+  messages     <- read_opt("messages.csv")   # chat timing and length, no text
+  chat_events  <- read_opt("chat_events.csv")   # failed model attempts, no text
 
-  complete <- participants |> filter(completed)
+  complete <- participants |> filter(as.logical(completed) %in% TRUE)
 
-  # Exclusion rule: replace with the rule you preregistered. Here: at least 6 of 8
-  # lexical-decision trials correct, and at least one speeded response at all (a session in
-  # which every speeded trial timed out is what a device without a keyboard produces).
-  ld <- trials |>
-    filter(task == "lexical_decision") |>
+  bfi <- trials |>
+    filter(task == "bfi") |>
+    transmute(participant_id,
+              attention_check_passed = as.logical(attention_check_passed),
+              bfi_n_skipped = as.numeric(bfi_n_skipped),
+              across(starts_with("trait_"), as.numeric))
+  # n_messages counts the visible messages only (participant + bot), never the hidden startup
+  # instruction stored as seq 0 of each chat.
+  chats <- trials |>
+    filter(task == "chat") |>
     group_by(participant_id) |>
-    summarise(ld_acc           = mean(as.logical(correct), na.rm = TRUE),
-              ld_all_timed_out = all(as.logical(timed_out)),
-              .groups = "drop")
-  checked <- complete |> left_join(ld, by = "participant_id")
-  keep <- checked |> filter(!is.na(ld_acc), !ld_all_timed_out, ld_acc >= 0.75)
+    summarise(n_chats = n(), min_turns = min(as.numeric(n_messages)), .groups = "drop")
+  aff <- trials |>
+    filter(task == "affiliation") |>
+    transmute(participant_id,
+              mirror  = as.numeric(affiliation_mirror),
+              inverse = as.numeric(affiliation_inverse))
 
-  list(participants = participants, trials = trials, errors = errors,
-       complete = complete, keep = keep,
-       n_no_response = sum(checked$ld_all_timed_out %in% TRUE))
+  traits <- c("trait_openness", "trait_conscientiousness", "trait_extraversion",
+              "trait_agreeableness", "trait_neuroticism")
+  scores <- complete |>
+    select(participant_id, order) |>
+    left_join(bfi, by = "participant_id") |>
+    left_join(chats, by = "participant_id") |>
+    left_join(aff, by = "participant_id") |>
+    mutate(
+      diff = mirror - inverse,
+      # Centred trait scores (1–5 minus 3, the paper's −2..+2 coding). Inverse = −centred.
+      sq_centred = rowSums(across(all_of(traits), ~ (.x - 3)^2)),
+      # Condition distance, paper Eq. 3: sum over traits of (m − i)^2 = 4 * sum(centred^2).
+      distance_paper = 4 * sq_centred,
+      # Condition distance, preregistration item 8: dot product m · i = −sum(centred^2).
+      distance_prereg = -sq_centred,
+      # Exclusions (preregistration item 6).
+      excl_turns     = is.na(min_turns) | n_chats < 2 | min_turns < 8,
+      excl_attention = !(attention_check_passed %in% TRUE),
+      excl_neutral   = sq_centred %in% 0 | (!is.na(sq_centred) & sq_centred < 1e-12),   # all five trait means exactly 3
+      # Not an exclusion rule: a participant with no rating for one bot has no difference score.
+      missing_dv     = is.na(diff)
+    )
+  keep <- scores |> filter(!excl_turns, !excl_attention, !excl_neutral, !missing_dv)
+
+  list(participants = participants, trials = trials, errors = errors, messages = messages,
+       chat_events = chat_events, complete = complete, scores = scores, keep = keep)
 }
 
-# The key comparison's raw counts: how many analysed participants chose the risky program
-# in each frame.
-risky_counts <- function(d) {
-  d$trials |>
-    filter(task == "framing", participant_id %in% d$keep$participant_id) |>
-    group_by(condition) |>
-    summarise(risky = sum(choice == "risky"), n = n(), .groups = "drop")
+# The key statistic: paired t-test of mirror vs inverse affiliation, d_z with a 95% CI, and the
+# Wilcoxon signed rank test (continuity corrected, as in the paper). NULL until there are at least
+# two analysed participants; NA statistics if their differences do not vary.
+paired_stats <- function(d) {
+  if (is.null(d) || nrow(d$keep) < 2) return(NULL)
+  k <- d$keep
+  n <- nrow(k)
+  out <- tibble(N = n, mean_diff = mean(k$diff), t = NA_real_, df = n - 1, p = NA_real_,
+                p_text = NA_character_, d = NA_real_, d_low = NA_real_, d_high = NA_real_,
+                V = NA_real_, p_wilcox = NA_real_, prop_mirror = mean(k$diff > 0))
+  if (sd(k$diff) == 0) return(out)
+  tt <- t.test(k$mirror, k$inverse, paired = TRUE)
+  wx <- suppressWarnings(wilcox.test(k$mirror, k$inverse, paired = TRUE, correct = TRUE))
+  dz <- mean(k$diff) / sd(k$diff)
+  se <- sqrt(1 / n + dz^2 / (2 * n))
+  out |> mutate(t = unname(tt$statistic), p = tt$p.value,
+                p_text = format.pval(tt$p.value, digits = 2, eps = 0.001),
+                d = dz, d_low = dz - 1.96 * se, d_high = dz + 1.96 * se,
+                V = unname(wx$statistic), p_wilcox = wx$p.value)
 }
 
-# The key statistic: difference in the proportion choosing the risky program (loss minus
-# gain) with a 95% CI, and the uncorrected chi-square, which is the same test. NULL until
-# both frames have at least one analysed participant.
-diff_ci <- function(counts) {
-  loss <- counts[counts$condition == "loss", ]
-  gain <- counts[counts$condition == "gain", ]
-  if (nrow(loss) == 0 || nrow(gain) == 0) return(NULL)
-  pt <- prop.test(c(loss$risky, gain$risky), c(loss$n, gain$n), correct = FALSE)
-  tibble(N = loss$n + gain$n,
-         estimate = unname(pt$estimate[1] - pt$estimate[2]),
-         ci_low = pt$conf.int[1], ci_high = pt$conf.int[2],
-         statistic = unname(pt$statistic), p = pt$p.value)
-}
-
-# Side-by-side figure: any number of studies on the same axes, in the order given.
-prop_ci <- function(x, n) {
-  ci <- prop.test(x, n, correct = FALSE)$conf.int
-  tibble(p = x / n, low = ci[1], high = ci[2])
-}
+# Side-by-side figure: the effect size (d_z, 95% CI) of each study on the same axis, in the order
+# given. The original's means are not reported, so effect sizes are what can be compared.
 comparison_plot <- function(...) {
   studies <- list(...)
-  studies <- studies[!map_lgl(studies, ~ is.null(.x) || nrow(.x) == 0)]
+  studies <- studies[!map_lgl(studies, ~ is.null(.x) || is.na(.x$d))]
   df <- imap_dfr(studies, ~ mutate(.x, Study = .y)) |>
-    rowwise() |> mutate(prop_ci(risky, n)) |> ungroup() |>
-    mutate(Study = factor(Study, levels = names(studies)), label = sprintf("n = %d", n))
-  fills <- setNames(c("grey55", "#1E6E76", "#B8792A")[seq_along(studies)], names(studies))
-  dodge <- position_dodge(width = 0.8)
-  ggplot(df, aes(x = condition, y = p, fill = Study)) +
-    geom_col(position = dodge, width = 0.75) +
-    geom_errorbar(aes(ymin = low, ymax = high), position = dodge, width = 0.2) +
-    geom_text(aes(y = 0.02, label = label), position = dodge, vjust = 0, size = 3, colour = "white") +
-    scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
-    scale_fill_manual(values = fills) +
-    labs(x = "Frame", y = "Chose the risky program", fill = NULL) +
-    theme_minimal(base_size = 12) +
-    theme(legend.position = "top")
+    mutate(Study = factor(Study, levels = rev(names(studies))),
+           label = sprintf("N = %d", as.integer(N)))
+  ggplot(df, aes(x = d, y = Study)) +
+    geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
+    geom_errorbar(aes(xmin = d_low, xmax = d_high), width = 0.15, orientation = "y") +
+    geom_point(size = 3, colour = "#1E6E76") +
+    geom_text(aes(label = label), vjust = -1.2, size = 3) +
+    labs(x = expression("Mirror − inverse affiliation, effect size " * d[z] * " (95% CI)"), y = NULL) +
+    theme_minimal(base_size = 12)
+}
+
+# Mean with a t-based 95% CI, for stat_summary().
+mean_ci <- function(y) {
+  y <- y[!is.na(y)]
+  m <- mean(y)
+  h <- if (length(y) > 1) qt(0.975, length(y) - 1) * sd(y) / sqrt(length(y)) else NA
+  data.frame(y = m, ymin = m - h, ymax = m + h)
+}
+
+# Within-participant figure: each participant's affiliation with the two bots, joined by a line,
+# with the condition means and 95% CIs.
+affiliation_plot <- function(d) {
+  long <- d$keep |>
+    select(participant_id, Mirror = mirror, Inverse = inverse) |>
+    pivot_longer(c(Mirror, Inverse), names_to = "Condition", values_to = "Affiliation") |>
+    mutate(Condition = factor(Condition, levels = c("Mirror", "Inverse")))
+  ggplot(long, aes(x = Condition, y = Affiliation)) +
+    geom_line(aes(group = participant_id), colour = "grey75") +
+    geom_point(colour = "grey55") +
+    stat_summary(fun.data = mean_ci, colour = "#1E6E76", size = 0.8, linewidth = 1) +
+    scale_y_continuous(breaks = -2:2) +
+    coord_cartesian(ylim = c(-2, 2)) +   # zoom, so CIs reaching past ±2 are clipped, not dropped
+    labs(x = NULL, y = "Affiliation score (−2 to +2)") +
+    theme_minimal(base_size = 12)
 }
 
 phase1 <- read_phase(experiment_id)
@@ -196,22 +254,23 @@ have_phase2 <- !is.null(phase2)
 #| echo: false
 fmt_row <- function(study, r) {
   if (is.null(r)) {
-    return(tibble(Study = study, N = "", `Effect (loss − gain)` = "not yet collected",
-                  `95% CI` = "", `χ²(1)` = "", p = ""))
+    return(tibble(Study = study, N = "", `Mean difference` = "not yet collected", `t (df)` = "",
+                  p = "", `d_z [95% CI]` = "", `% higher for mirror` = ""))
   }
   tibble(Study = study, N = as.character(r$N),
-         `Effect (loss − gain)` = sprintf("%.0f points", 100 * r$estimate),
-         `95% CI` = sprintf("[%.0f, %.0f]", 100 * r$ci_low, 100 * r$ci_high),
-         `χ²(1)` = sprintf("%.2f", r$statistic),
-         p = format.pval(r$p, digits = 2, eps = 0.001))
+         `Mean difference` = if (is.na(r$mean_diff)) "not reported" else sprintf("%.2f", r$mean_diff),
+         `t (df)` = if (is.na(r$t)) "" else sprintf("%.2f (%d)", r$t, as.integer(r$df)),
+         p = if (is.na(r$p_text)) "" else r$p_text,
+         `d_z [95% CI]` = if (is.na(r$d)) "" else sprintf("%.2f [%.2f, %.2f]", r$d, r$d_low, r$d_high),
+         `% higher for mirror` = sprintf("%.0f%%", 100 * r$prop_mirror))
 }
 bind_rows(
-  fmt_row("Original", diff_ci(original)),
-  fmt_row("Phase 1: replication", if (have_data) diff_ci(risky_counts(phase1))),
-  fmt_row("Phase 2: extension", if (have_phase2) diff_ci(risky_counts(phase2)))
+  fmt_row("Original", original),
+  fmt_row("Phase 1: replication", if (have_data) paired_stats(phase1)),
+  fmt_row("Phase 2: extension", if (have_phase2) paired_stats(phase2))
 ) |>
-  knitr::kable(align = "lrlllr",
-               caption = "Key comparison: difference in the percentage of analysed participants choosing the risky program, loss frame minus gain frame.")
+  knitr::kable(align = "lrrrrrr",
+               caption = "Key comparison: affiliation with the mirror minus the inverse chatbot (−2 to +2 scale), paired t-test and d_z. The original paper does not report the mean difference.")
 ```
 
 # Phase 1: Replication
@@ -226,114 +285,61 @@ For my replication, I recruited people on Prolific and had them complete the sam
 
 ### Power analysis
 
-::: {.callout-tip icon=false}
-## Guidance
+The original study concluded a paired standardized effect of approximately d_z = 0.57. The table below illustrated the sample sizes required for 80%, 90%, and 95% power using a two-sided paired-samples t-test with α = .05 as well as calculations for a smaller effect of d_z = 0.30, which was the effect carried out by the original authors’ preregistered sample-size calculation. 
 
-Report the original effect size, the sample needed for 80%, 90% and 95% power to detect it,
-and the sample you chose and why. The table below is computed from the original study's
-numbers entered at the top of this file.
+In terms of comparisons, collecting 2.5 times times the original sample inquired recruiting 250 participants, which was unrealistic given the budget constraints. Hence, I targeted the original sample size of 100 participants and had them all complete both chatbot conversations. I predicted that the final number of usable paired observations would be smaller after exclusions and missing outcomes, reducing statistical power.
 
-Original effects are usually overestimates, so powering to the original effect tends to
-produce an underpowered replication. One widely used alternative is to collect 2.5 times the
-original sample, which gives 80% power to detect an effect the original study had only 33%
-power to detect (Simonsohn, 2015; Experimentology §10.4). Say which approach you used, and
-what the course's participant budget allowed.
-:::
 
 ```{r}
 #| label: power
-power_rows <- map_dfr(c(0.80, 0.90, 0.95), function(pw) {
-  n <- power.prop.test(p1 = original_p_gain, p2 = original_p_loss,
-                       power = pw, sig.level = 0.05)$n
-  tibble(power = scales::percent(pw), n_per_group = ceiling(n), n_total = 2 * ceiling(n))
-})
+power_rows <- expand_grid(d = c(original$d, prereg_d), power = c(0.80, 0.90, 0.95)) |>
+  rowwise() |>
+  mutate(n = ceiling(power.t.test(delta = d, sd = 1, power = power, sig.level = 0.05, type = "paired")$n)) |>
+  ungroup() |>
+  transmute(`Effect (d_z)` = sprintf("%.2f%s", d, ifelse(d == original$d, " (original)", " (preregistration)")),
+            Power = scales::percent(power), `N participants` = n)
 
-original_effect <- original_p_loss - original_p_gain
-two_and_half <- ceiling(2.5 * original$n)
+two_and_half <- ceiling(2.5 * original$N)
 
-knitr::kable(power_rows, col.names = c("Power", "N per frame", "N total"),
-             caption = sprintf(
-               "Sample needed to detect the original effect (risky choice: %.0f%% gain vs %.0f%% loss, a difference of %.0f points), two-sided alpha = .05.",
-               100 * original_p_gain, 100 * original_p_loss, 100 * original_effect))
+knitr::kable(power_rows,
+             caption = "Participants needed (each chats with both bots) for a two-sided paired t-test, alpha = .05.")
 ```
-
-For comparison, 2.5 times the original sample would be `r two_and_half[1]` in the gain frame
-and `r two_and_half[2]` in the loss frame (`r sum(two_and_half)` in total).
 
 ### Planned sample
 
-::: {.callout-tip icon=false}
-## Guidance
-
-Planned sample size and stopping rule, sampling frame (for example, "US residents on Prolific,
-fluent in English, 18 or older"), known demographics, and any preselection or screening. The
-stopping rule should be data-independent: "collect until N participants pass the exclusion
-criteria below" rather than "until the result is clear".
-:::
+My planned sample size was the same with orginal study's sample size (N = 100) given the budget constraint. They should also be at least 18 years old and native in English. The eligibility was established through Prolific's prescreening filters so that a survey wasn't required. Recruitment would stop when 100 unique participants had completed the study.
 
 ### Materials
 
-::: {.callout-tip icon=false}
-## Guidance
+Participants' personalities were assessed using the 44-item Big Five Inventory which measured Openness, Conscientiousness, Extraversion, Agreeableness and Neuroticism by asking them to rate each item on a five-point agreement scale. Before computing the means for each trait, reverse-coded items were recorded. After completing item 22, an instructed-response attention check was presented asking participants to select "Disagree." The personality instructions applied in this study were identical to those used in Experiment 3 of Castiello et al. (2026). For each participant, the mirror profile was based upon the five calculated trait means; whereas, the inverse profile was based upon six minus each corresponding mean. These profiles were used to direct the conversational style of the two chatbots via prompts as opposed to further model training. 
 
-All materials. You can quote the original article directly: put the text in quotation marks
-and note that it was followed precisely, or quote it and point out the exceptions. Link to the
-live experiment above rather than pasting screenshots of every screen.
-:::
+Both chatbots were based upon Gemini 3.8 Flash, and were configured with the provider’s default generation settings, including a medium thinking level. Each chatbot had its own unique conversation history. The personality instructions was provided to each chatbot via the backend as opposed to being shown in the chat interface. A hidden startup instruction ("Start a casual conversation with a friend") was used to begin every conversation. Affiliation was measured using six post-chat ratings for each chatbot. Ratings were coded from -2 to +2, and the distance and difference items were reverse-scored. The mean of the answered items was used to create an affiliation score for each chatbot. Higher scores indicated greater affiliation.
 
 ### Procedure
 
-::: {.callout-tip icon=false}
-## Guidance
+Participants began by reading the consent information and stating if they wish to participate. Then they completed the personality questionnaire and attention check, after which they received instructions on how to converse with the AI chatbots. Participants were reminded that they were conversing with AI chatbots called Pat and Alex; however, the relationship between each chatbot and the personality conditions wasn't revealed prior to rating.
 
-As for Materials: quote the original where you can and point out the exceptions. Describe the
-sequence a participant experiences, from consent to debrief, and how long it takes.
-:::
+Participants then started two separate conversations with the two chatbots. The order of the mirror and inverse conditions and the name assigned to each condition were randomly determined. The conversations were initiated by chatbots and consist of 24 visible messages (12 from the chatbot and 12 from the participant) that concluded after the participant's last message. Following both conversations, participants were asked to provide affiliation ratings for each chatbot and chose to answer demographic questions. Participants were then debriefed regarding the personality manipulation and clicked "Finish" to submit their responses.
 
 ### Analysis plan
 
-::: {.callout-tip icon=false}
-## Guidance
+**Key analysis of interest.** The main analysis employed a two-sided paired-samples t-test (α = .05) to assess whether there was a difference in participants' affiliation with the mirror chatbot versus their affiliation with the inverse chatbot.
 
-The analysis strategy, as close to the original as possible: data cleaning rules, exclusion
-rules, covariates, and the model or test. Original papers often do not spell this out; say
-where you had to make a choice and what you chose.
+Each participant's difference score was computed by subtracting their affiliation with the inverse chatbot from their affiliation with the mirror chatbot; therefore, positive scores represented higher levels of affiliation with the mirror chatbot. I provided the mean difference, t-statistic, degrees of freedom, p-value, and paired standardized effect size d_z along with its 95% confidence interval. In addition, I conducted a Wilcoxon signed-rank test as a secondary robustness check.
 
-**State the key analysis of interest explicitly.** That is the single test your replication
-stands or falls on, and it must match your preregistration. You can pre-specify additional
-analyses here too.
-:::
-
-**Key analysis of interest.** The proportion of participants choosing the risky program is
-higher in the loss frame than in the gain frame, tested with a chi-square test of independence
-on the 2 × 2 table of frame by choice. The effect size is the difference in the proportion
-choosing the risky program (loss minus gain), with a 95% confidence interval.
-
-**Exclusions.** Participants are excluded if they did not complete the study, if they answered
-no speeded trial at all (every lexical-decision trial timed out, the signature of a device
-without a keyboard), or if they answered fewer than 6 of the 8 lexical-decision trials
-correctly.
+**Exclusions.** Participants were excluded from the sample if they didn't pass the attention check, or didn't complete at least eight visible messages in either conversation, or had a mean score of exactly 3 on all five personality dimensions. Missing responses weren't imputed. Participants were permitted to leave up to five BFI items blank. A usable affiliation score for both chatbots was needed for the paired analysis; any omissions due to missing affiliation scores was reported separately from other exclusions. Demographics were optional.
 
 ### Differences from the original study
 
-::: {.callout-tip icon=false}
-## Guidance
-
-Every known difference in sample, setting, procedure, materials, and analysis, one per row.
-Minimizing differences is the goal, but some always remain. For each one, say whether it is
-expected to matter, based on claims in the original article or later research on when the
-effect does and does not appear. The rows below are the demo's real differences and show the
-level of detail expected; replace them with yours.
-:::
-
 | Aspect | Original study | This replication | Expected to matter? |
 |---|---|---|---|
-| Sample | University students in Stanford and British Columbia classrooms | Adults recruited on Prolific | Possibly. Framing effects have been found in both student and general samples, but their size varies across populations. |
-| Setting | Paper questionnaire in class | Online, unsupervised, on the participant's own computer | Unlikely for a single vignette, though attention may be lower online. |
-| Wording | "an unusual Asian disease" | "an unusual disease" | Unlikely. The ethnonym is incidental to the manipulation and dated. |
-| Design | Between subjects: each participant saw one frame | Between subjects, randomly assigned | No. |
-| Response | Circle a program on paper | Click a button | Unlikely. |
-| Other tasks | Problems presented alongside other questionnaire items | Followed by a short lexical-decision task used as an attention check | Unlikely: the check comes after the choice. |
+| Language model | GPT-4.1 | Gemini 3.8 Flash | Unlikely, though models may express personality traits differently, affecting the strength of the manipulation. |
+| Study platform | Generative Studio X | A jsPsych study hosted on GitHub Pages, with a Firebase backend | Interface features and response delays may slightly affect the experience. |
+| Attention check | The original preregistration mentions “anti-AI attentional checks,” without specific wording there. | I designed an instructed-response item after BFI item 22 asking participants to select “Disagree.” | Unlikely, though the checks may identify different kinds of inattentive responding. |
+| Missing BFI responses | The original missing-response allowance wasn't exhibited in the sources. | I decided to permit up to five unanswered terms. | Maybe, missing responses could affect the personality profiles used to prompt the bots. |
+| Starting the conversation | The original study let the chatbots initiate each conversation without giving the exact startup request. | I specified an hidden instruction to start the conversation. | Unlikely, though the opening may affect perceived familiarity. |
+| Conversation length | 24 conversational turns | Each chat contained 24 visible messages, counting both speakers and including the bot’s opener. The hidden instruction was excluded. | Maybe, as this was my interpretation of “turn”; exact equivalence to the original counting convention remained unverified. |
+| Generation settings | Exact generation settings have not been established from the sources. | No explicit temperature, top-p, maximum output tokens, or thinking level was set; provider defaults applied equally to both bots. | Maybe, as differences in generation behavior could affect style, length, or response time. |
 
 ### Methods addendum (post data collection)
 
@@ -368,12 +374,14 @@ if (!have_data) {
 #| eval: !expr have_data
 # Loaded and excluded by read_phase(), under Key statistics, so Phase 1 and Phase 2 share one
 # exclusion rule.
-participants  <- phase1$participants
-trials        <- phase1$trials
-errors        <- phase1$errors
-complete      <- phase1$complete
-keep          <- phase1$keep
-n_no_response <- phase1$n_no_response
+participants <- phase1$participants
+trials       <- phase1$trials
+errors       <- phase1$errors
+messages     <- phase1$messages
+chat_events  <- phase1$chat_events
+complete     <- phase1$complete
+scores       <- phase1$scores
+keep         <- phase1$keep
 ```
 
 ```{r}
@@ -385,12 +393,20 @@ bind_rows(
   complete     |> mutate(step = "Completed"),
   keep         |> mutate(step = "Passed exclusion criteria")
 ) |>
-  mutate(step = factor(step, levels = funnel_levels)) |>
-  count(step, condition, .drop = FALSE) |>
-  pivot_wider(names_from = condition, values_from = n, values_fill = 0) |>
+  mutate(step = factor(step, levels = funnel_levels),
+         order = replace_na(as.character(order), "not assigned")) |>
+  count(step, order, .drop = FALSE) |>
+  pivot_wider(names_from = order, values_from = n, values_fill = 0) |>
   mutate(Total = rowSums(across(-step))) |>
   rename(Step = step) |>
-  knitr::kable(caption = "Participants at each step, by frame. Differences between frames in attrition or exclusion are a threat to validity and should be discussed.")
+  knitr::kable(caption = "Participants at each step, by chat order. Differences between orders in attrition or exclusion are a threat to validity and should be discussed.")
+
+scores |>
+  summarise(`Fewer than 8 turns in a chat` = sum(excl_turns),
+            `Failed attention check` = sum(excl_attention),
+            `All five traits exactly 3` = sum(excl_neutral),
+            `No rating for one bot` = sum(missing_dv)) |>
+  knitr::kable(caption = "Completed participants meeting each exclusion criterion (a participant can meet more than one).")
 ```
 
 ```{r}
@@ -400,11 +416,7 @@ bind_rows(
 #| results: asis
 cat(sprintf("Of %d participants who started, %d completed the study and %d met the exclusion criteria.",
             nrow(participants), nrow(complete), nrow(keep)))
-if (n_no_response > 0) {
-  cat(sprintf(" %d completed session(s) contained no response to any speeded trial and were excluded on that basis.",
-              n_no_response))
-}
-if (nrow(keep) == 0) cat(" No participants remain for analysis yet, so the results below are empty.")
+if (nrow(keep) < 2) cat(" Fewer than two participants remain for analysis, so the results below are empty.")
 cat("\n")
 ```
 
@@ -455,21 +467,29 @@ the data beyond that.
 ```{r}
 #| label: confirmatory
 #| eval: !expr have_data
-framing <- trials |>
-  filter(task == "framing", participant_id %in% keep$participant_id) |>
-  select(participant_id, condition, choice)
-risky <- risky_counts(phase1)
-tab <- table(Frame = framing$condition, Choice = framing$choice)
+p1 <- paired_stats(phase1)
 
-if (all(dim(tab) == c(2, 2))) {
-  # No continuity correction, so this test and the effect-size interval below agree: the
-  # uncorrected 2 x 2 chi-square is the same test as the two-proportion comparison.
-  print(tab)
-  print(chisq.test(tab, correct = FALSE))
+if (!is.null(p1) && !is.na(p1$t)) {
+  # Preregistered key test: paired t-test, mirror vs inverse affiliation.
+  print(t.test(keep$mirror, keep$inverse, paired = TRUE))
+  # As in the paper: Wilcoxon signed rank test with continuity correction.
+  print(suppressWarnings(wilcox.test(keep$mirror, keep$inverse, paired = TRUE, correct = TRUE)))
+  cat(sprintf("d_z = %.2f, 95%% CI [%.2f, %.2f]\n", p1$d, p1$d_low, p1$d_high))
+
+  # Preregistered secondary analysis (item 8): affiliation ~ condition × condition distance,
+  # with distance as in the paper's Eq. 3 (sum of squared differences) and, for comparison, as
+  # the preregistration's dot product. The paper does not give the exact model behind its
+  # reported interaction, so this is our implementation of the preregistered description.
+  long <- keep |>
+    pivot_longer(c(mirror, inverse), names_to = "condition", values_to = "affiliation") |>
+    mutate(condition = factor(condition, levels = c("inverse", "mirror")))
+  if (n_distinct(long$distance_paper) > 1) {
+    print(summary(lm(affiliation ~ condition * distance_paper, data = long)))
+    print(summary(lm(affiliation ~ condition * distance_prereg, data = long)))
+  }
 } else {
-  message("Chi-square not run: the frame-by-choice table is ", paste(dim(tab), collapse = " x "),
-          ". It needs both frames and both choices; with ", nrow(framing),
-          " participant(s) in the analysis set this is expected.")
+  message("Key test not run: it needs at least two analysed participants whose difference scores vary; ",
+          "there are ", nrow(keep), " in the analysis set.")
 }
 ```
 
@@ -488,18 +508,18 @@ informative and should be reported as such (Experimentology §3.2).
 ```{r}
 #| label: comparison
 #| eval: !expr have_data
-orig <- diff_ci(original)
-rep  <- diff_ci(risky)
+orig <- original
+rep  <- paired_stats(phase1)
 
-if (!is.null(rep)) {
+if (!is.null(rep) && !is.na(rep$d)) {
   bind_rows(orig |> mutate(Study = "Original"), rep |> mutate(Study = "Phase 1: replication")) |>
     transmute(Study, N,
-              `Difference (loss − gain)` = sprintf("%.0f points", 100 * estimate),
-              `95% CI` = sprintf("[%.0f, %.0f]", 100 * ci_low, 100 * ci_high),
-              p = format.pval(p, digits = 2, eps = 0.001)) |>
-    knitr::kable(caption = "Effect size: difference in the percentage choosing the risky program.")
+              `d_z` = sprintf("%.2f", d),
+              `95% CI` = sprintf("[%.2f, %.2f]", d_low, d_high),
+              p = p_text) |>
+    knitr::kable(caption = "Effect size: affiliation with the mirror minus the inverse chatbot.")
 } else {
-  message("Replication effect size not computed yet: need at least one analysed participant in each frame.")
+  message("Replication effect size not computed yet: need at least two analysed participants with varying difference scores.")
 }
 ```
 
@@ -508,14 +528,14 @@ if (!is.null(rep)) {
 #| eval: !expr have_data
 #| echo: false
 #| results: asis
-if (!is.null(rep)) {
-  excludes_zero <- rep$ci_low > 0 | rep$ci_high < 0
-  includes_orig <- orig$estimate >= rep$ci_low & orig$estimate <= rep$ci_high
+if (!is.null(rep) && !is.na(rep$d)) {
+  excludes_zero <- rep$d_low > 0 | rep$d_high < 0
+  includes_orig <- orig$d >= rep$d_low & orig$d <= rep$d_high
   cat(sprintf(
-    "The replication's 95%% interval %s zero and %s the original estimate of %.0f points. ",
+    "The replication's 95%% interval for d_z %s zero and %s the original estimate of %.2f. ",
     if (excludes_zero) "excludes" else "includes",
     if (includes_orig) "includes" else "does not include",
-    100 * orig$estimate))
+    orig$d))
   cat("These two facts are the starting point for the summary in the Discussion, not the conclusion.\n")
 }
 ```
@@ -555,10 +575,22 @@ caption. If the original reported no variability, say so rather than leaving it 
 ```{r}
 #| label: fig-comparison
 #| eval: !expr have_data
-#| fig-cap: "Percentage choosing the risky program in each frame, original study and Phase 1 replication. Error bars are 95% confidence intervals."
+#| fig-cap: "Mirror minus inverse affiliation as an effect size (d_z, 95% CI), original study and Phase 1 replication. The original values are from the paper's text (p. 7); it does not report the condition means."
 #| fig-width: 7
+#| fig-height: 2.5
+comparison_plot(Original = original, `Phase 1: replication` = paired_stats(phase1))
+# To show the original's Fig. 4A next to this (the original reports no means to replot), save a
+# screenshot as writeup/images/original-figure.png and lay the two out with
+# ::: {layout-ncol=2} as described in the guidance box above.
+```
+
+```{r}
+#| label: fig-affiliation
+#| eval: !expr have_data
+#| fig-cap: "Phase 1: each participant's affiliation with the mirror and the inverse chatbot (grey lines), with condition means and 95% CIs."
+#| fig-width: 5
 #| fig-height: 4
-comparison_plot(Original = original, `Phase 1: replication` = risky)
+if (nrow(keep) > 0) affiliation_plot(phase1)
 ```
 
 ### Exploratory analyses
@@ -571,20 +603,63 @@ they generate hypotheses rather than test them.
 :::
 
 ```{r}
-#| label: exploratory-rt
+#| label: exploratory-chat
 #| eval: !expr have_data
-ld <- trials |>
-  filter(task == "lexical_decision", participant_id %in% keep$participant_id) |>
-  mutate(correct = as.logical(correct), is_word = as.logical(is_word), rt = as.numeric(rt)) |>
-  filter(correct, !is.na(rt))
+# Exploratory: order effect (as in the supplement's "Order effect" analysis), how long each chat
+# took and how much participants wrote, and how long the model took to reply.
+if (nrow(keep) > 2 && n_distinct(keep$order) > 1) {
+  print(summary(lm(diff ~ order, data = keep)))
+}
 
-if (nrow(ld) > 0) {
-  ld |>
-    group_by(`Real word` = is_word) |>
-    summarise(`Mean RT (ms)` = round(mean(rt)), `SD (ms)` = round(sd(rt)), Trials = n(), .groups = "drop") |>
-    knitr::kable(caption = "Exploratory: lexical-decision response times, correct trials only.")
+chat_rows <- trials |>
+  filter(task == "chat", participant_id %in% keep$participant_id) |>
+  mutate(minutes = as.numeric(duration_ms) / 60000, participant_chars = as.numeric(participant_chars))
+if (nrow(chat_rows) > 0) {
+  chat_rows |>
+    group_by(Condition = bot_condition) |>
+    summarise(Chats = n(), `Median minutes` = round(median(minutes), 1),
+              `Median characters typed` = median(participant_chars), .groups = "drop") |>
+    knitr::kable(caption = "Exploratory: chat length by condition (analysed participants).")
+}
+
+# Model reply time. latency_ms is timed on the chat service, from sending the request to the
+# model to getting its reply back, for the attempt that succeeded only. It leaves out failed
+# attempts, the network between the page and the service, database reads and writes, and any
+# time spent on "Try again", so it is not how long the participant waited. Seq 1 is each bot's
+# opener (its answer to the hidden startup instruction); the rest answer participant messages.
+# A missing latency is counted as missing, never as zero.
+bot_replies <- if (all(c("from", "latency_ms", "attempts") %in% names(messages))) {
+  messages |> filter(from == "bot", participant_id %in% keep$participant_id)
+} else tibble()
+if (nrow(bot_replies) > 0) {
+  bot_replies |>
+    mutate(Reply = if_else(as.numeric(seq) == 1, "Opener (answers the hidden startup instruction)",
+                           "Reply to a participant message"),
+           seconds = as.numeric(latency_ms) / 1000) |>
+    group_by(Reply) |>
+    summarise(`Successful replies` = n(),
+              `Latency missing` = sum(is.na(seconds)),
+              `Median seconds` = round(median(seconds, na.rm = TRUE), 2),
+              `90th percentile` = round(quantile(seconds, 0.9, na.rm = TRUE, names = FALSE), 2),
+              `Succeeded on 2nd+ attempt` = sum(as.numeric(attempts) > 1, na.rm = TRUE),
+              .groups = "drop") |>
+    knitr::kable(caption = paste("Exploratory: model time for successful bot replies (latency_ms, the",
+                                 "successful attempt only; not participants' total waiting time), analysed participants."))
+}
+
+# Retries. Each participant message gets up to model_attempts tries within one request
+# (server/config.js). If all of them fail the participant sees "Try again", and the next request
+# counts its attempts from 1 again, so `attempts` on a reply does not include failures from an
+# earlier request. Every failed attempt is logged in chat_events.csv, summarised here.
+failed <- if (nrow(chat_events) > 0) chat_events |> filter(participant_id %in% keep$participant_id) else tibble()
+if (nrow(failed) > 0) {
+  failed |>
+    group_by(Code = code) |>
+    summarise(`Failed attempts` = n(),
+              `Replies affected` = n_distinct(paste(participant_id, chat_index, seq)), .groups = "drop") |>
+    knitr::kable(caption = "Exploratory: failed model attempts (chat_events.csv), analysed participants.")
 } else {
-  message("No correct lexical-decision trials with a response time yet.")
+  message("No failed model attempts were logged for analysed participants.")
 }
 ```
 
@@ -694,43 +769,39 @@ have it and the original's otherwise.
 
 ```{r}
 #| label: phase2-power
-phase2_n_per_group <- 150   # planned analysed participants per condition in Phase 2
+phase2_n <- 150   # planned analysed participants in Phase 2 (each chats with both bots)
 
-p1_counts <- if (have_data) risky_counts(phase1)
-p1_stats  <- if (have_data) diff_ci(p1_counts)
-basis <- if (!is.null(p1_stats)) {
-  list(gain = p1_counts$risky[p1_counts$condition == "gain"] / p1_counts$n[p1_counts$condition == "gain"],
-       loss = p1_counts$risky[p1_counts$condition == "loss"] / p1_counts$n[p1_counts$condition == "loss"],
-       source = "Phase 1")
-} else {
-  list(gain = original_p_gain, loss = original_p_loss, source = "the original study")
-}
+p1_stats <- if (have_data) paired_stats(phase1)
+basis_d  <- if (!is.null(p1_stats) && !is.na(p1_stats$d)) p1_stats$d else original$d
+basis    <- if (!is.null(p1_stats) && !is.na(p1_stats$d)) "Phase 1" else "the original study"
 
-# Expected 95% CI half-width on the difference at n per condition.
-half_width <- function(n) 1.96 * sqrt(basis$gain * (1 - basis$gain) / n + basis$loss * (1 - basis$loss) / n)
-power_at <- function(n, p1, p2) {
-  tryCatch(power.prop.test(n = n, p1 = p1, p2 = p2, sig.level = 0.05)$power, error = function(e) NA)
+# Expected 95% CI half-width on d_z with n participants.
+half_width <- function(n, d) 1.96 * sqrt(1 / n + d^2 / (2 * n))
+power_at <- function(n, d) {
+  tryCatch(power.t.test(n = n, delta = d, sd = 1, sig.level = 0.05, type = "paired")$power, error = function(e) NA)
 }
 
 rows <- tibble(
-  Study = c(if (!is.null(p1_stats)) "Phase 1 (actual)", "Phase 2 (planned)"),
-  `N analysed` = c(if (!is.null(p1_stats)) p1_stats$N, 2 * phase2_n_per_group),
-  `95% CI half-width` = c(if (!is.null(p1_stats)) sprintf("±%.0f points", 100 * (p1_stats$ci_high - p1_stats$ci_low) / 2),
-                          sprintf("±%.0f points (expected)", 100 * half_width(phase2_n_per_group)))
+  Study = c(if (!is.null(p1_stats) && !is.na(p1_stats$d)) "Phase 1 (actual)", "Phase 2 (planned)"),
+  `N analysed` = c(if (!is.null(p1_stats) && !is.na(p1_stats$d)) p1_stats$N, phase2_n),
+  `95% CI half-width on d_z` = c(if (!is.null(p1_stats) && !is.na(p1_stats$d)) sprintf("±%.2f", (p1_stats$d_high - p1_stats$d_low) / 2),
+                                 sprintf("±%.2f (expected)", half_width(phase2_n, basis_d)))
 )
-knitr::kable(rows, caption = sprintf("Precision of the key estimate, Phase 2 expected values based on %s.", basis$source))
+knitr::kable(rows, caption = sprintf("Precision of the key estimate, Phase 2 expected values based on %s.", basis))
 
 tibble(
-  `Effect to detect` = c(sprintf("Original: %.0f points", 100 * (original_p_loss - original_p_gain)),
-                         if (!is.null(p1_stats)) sprintf("Phase 1: %.0f points", 100 * p1_stats$estimate),
-                         sprintf("Half the original: %.0f points", 50 * (original_p_loss - original_p_gain))),
+  `Effect to detect` = c(sprintf("Original: d_z = %.2f", original$d),
+                         if (!is.null(p1_stats) && !is.na(p1_stats$d)) sprintf("Phase 1: d_z = %.2f", p1_stats$d),
+                         sprintf("Preregistration: d_z = %.2f", prereg_d),
+                         sprintf("Half the original: d_z = %.2f", original$d / 2)),
   `Power at planned N` = scales::percent(c(
-    power_at(phase2_n_per_group, original_p_gain, original_p_loss),
-    if (!is.null(p1_stats)) power_at(phase2_n_per_group, basis$gain, basis$loss),
-    power_at(phase2_n_per_group, original_p_gain, original_p_gain + (original_p_loss - original_p_gain) / 2)
+    power_at(phase2_n, original$d),
+    if (!is.null(p1_stats) && !is.na(p1_stats$d)) power_at(phase2_n, p1_stats$d),
+    power_at(phase2_n, prereg_d),
+    power_at(phase2_n, original$d / 2)
   ), accuracy = 1)
 ) |>
-  knitr::kable(caption = sprintf("Power of the Phase 2 key test at %d per condition, two-sided alpha = .05.", phase2_n_per_group))
+  knitr::kable(caption = sprintf("Power of the Phase 2 key test with %d participants, two-sided alpha = .05.", phase2_n))
 ```
 
 ## Analysis plan
@@ -768,27 +839,26 @@ if (!have_phase2) {
 ```{r}
 #| label: phase2-results
 #| eval: !expr have_phase2
-p2_counts <- risky_counts(phase2)
-p2_stats  <- diff_ci(p2_counts)
+p2_stats <- paired_stats(phase2)
 cat(sprintf("Phase 2: %d started, %d completed, %d analysed.\n",
             nrow(phase2$participants), nrow(phase2$complete), nrow(phase2$keep)))
-if (!is.null(p2_stats)) {
-  p_text <- if (p2_stats$p < 0.001) "p < .001" else sprintf("p = %.3f", p2_stats$p)
-  cat(sprintf("Key comparison: %.0f points [%.0f, %.0f], chi-square(1) = %.2f, %s.\n",
-              100 * p2_stats$estimate, 100 * p2_stats$ci_low, 100 * p2_stats$ci_high,
-              p2_stats$statistic, p_text))
+if (!is.null(p2_stats) && !is.na(p2_stats$t)) {
+  cat(sprintf("Key comparison: mean difference %.2f, t(%d) = %.2f, p %s, d_z = %.2f [%.2f, %.2f].\n",
+              p2_stats$mean_diff, as.integer(p2_stats$df), p2_stats$t,
+              if (p2_stats$p < 0.001) "< .001" else sprintf("= %.3f", p2_stats$p),
+              p2_stats$d, p2_stats$d_low, p2_stats$d_high))
 }
 ```
 
 ```{r}
 #| label: fig-phase2
 #| eval: !expr have_phase2
-#| fig-cap: "Percentage choosing the risky program in each frame: original study, Phase 1 replication, and Phase 2 extension. Error bars are 95% confidence intervals."
+#| fig-cap: "Mirror minus inverse affiliation as an effect size (d_z, 95% CI): original study, Phase 1 replication, and Phase 2 extension."
 #| fig-width: 8
-#| fig-height: 4
+#| fig-height: 3
 comparison_plot(Original = original,
-                `Phase 1: replication` = if (have_data) risky_counts(phase1),
-                `Phase 2: extension` = risky_counts(phase2))
+                `Phase 1: replication` = if (have_data) paired_stats(phase1),
+                `Phase 2: extension` = paired_stats(phase2))
 ```
 
 ## Discussion
@@ -812,7 +882,7 @@ should be public; if something cannot be shared, say what and why.
 :::
 
 The experiment code, the anonymized data, and the code that produces every number in this
-report are available at <https://github.com/psych251/your-repo>. The experiment itself can be
-taken at <https://psych251.github.io/your-repo/>. The data contain no names, email addresses,
+report are available at <https://github.com/psych251/castiello2026/>. The experiment itself can be
+taken at <https://psych251.github.io/castiello2026/>. The data contain no names, email addresses,
 IP addresses, or Prolific IDs; the file linking participants to their Prolific IDs is kept
 privately for payment and is not shared.

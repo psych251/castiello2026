@@ -1,0 +1,27 @@
+/* Experiment-specific styles. jsPsych's defaults are in lib/jspsych.css. */
+.jspsych-content { max-width: 960px; text-align: left; }
+.jspsych-content h1, .jspsych-content h2 { text-align: center; }
+.consent { font-size: 15px; line-height: 1.5; }
+.consent .buttons { text-align: center; }
+.instructions { font-size: 17px; line-height: 1.6; }
+.todo { background: #fff3cd; color: #5c4400; padding: 6px 10px; border-radius: 4px; }
+
+/* Relay chat (src/plugin-relay-chat.js) */
+.chat { display: flex; flex-direction: column; width: min(680px, 92vw); margin: 0 auto; font-size: 16px; }
+.chat-header { font-weight: 600; font-size: 20px; text-align: center; margin-bottom: 4px; }
+.chat-counter { text-align: center; color: #666; font-size: 14px; margin-bottom: 8px; }
+.chat-log { height: min(55vh, 520px); overflow-y: auto; border: 1px solid #ccc; border-radius: 8px;
+            padding: 12px; background: #fafafa; display: flex; flex-direction: column; gap: 8px; }
+.chat-msg { max-width: 78%; padding: 8px 12px; border-radius: 14px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }
+.chat-bot { align-self: flex-start; background: #e6e9ef; color: #111; }
+.chat-participant { align-self: flex-end; background: #1f5f99; color: #fff; }
+.chat-status { min-height: 1.5em; color: #666; font-size: 14px; margin: 6px 2px; }
+.chat-form { display: flex; gap: 8px; align-items: flex-end; }
+.chat-input { flex: 1; font: inherit; padding: 8px; border-radius: 6px; border: 1px solid #aaa; resize: vertical; }
+.chat-send { margin: 0; }
+.chat-end { text-align: center; margin-top: 12px; }
+#jspsych-html-button-response-btngroup { text-align: center; }
+.thanks { text-align: center; }
+
+/* Survey pages (BFI, post-chat ratings): use the full width so the five answer columns fit. */
+.jspsych-content:has(.jspsych-survey-container) { width: min(960px, 96vw); }

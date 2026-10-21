@@ -2,12 +2,15 @@
 //   npm start            -> http://localhost:8000
 //   PORT=8123 npm start  -> another port
 // Serves the repo root so the site looks exactly like it does on GitHub Pages.
+// Under `npm run dev` (EMULATOR_ONLY=1) every page is forced to ?emulator=1, so a bare
+// http://localhost:8000/ cannot sign in to the live Firebase project.
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
 const port = Number(process.env.PORT || 8000);
+const emulatorOnly = process.env.EMULATOR_ONLY === "1";
 const types = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -27,6 +30,14 @@ http
   .createServer((req, res) => {
     let urlPath = decodeURIComponent(req.url.split("?")[0]);
     if (urlPath.endsWith("/")) urlPath += "index.html";
+    if (emulatorOnly && urlPath.endsWith(".html")) {
+      const url = new URL(req.url, "http://localhost");
+      if (url.searchParams.get("emulator") !== "1") {
+        url.searchParams.set("emulator", "1");
+        res.writeHead(302, { Location: url.pathname + url.search, "Cache-Control": "no-store" });
+        return res.end();
+      }
+    }
     const file = path.normalize(path.join(root, urlPath));
     if (!file.startsWith(root) || file.includes(`${path.sep}node_modules${path.sep}`)) {
       res.writeHead(403);
@@ -44,4 +55,4 @@ http
       res.end(data);
     });
   })
-  .listen(port, () => console.log(`Serving ${root} at http://localhost:${port}`));
+  .listen(port, () => console.log(`Serving ${root} at http://localhost:${port}` + (emulatorOnly ? " (emulator only)" : "")));

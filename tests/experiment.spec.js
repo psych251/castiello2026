@@ -18,7 +18,7 @@ const Castiello = require("../server/castiello.js");
 
 const EMULATOR = process.env.EMULATOR === "1" || !!process.env.FIRESTORE_EMULATOR_HOST;
 const PROJECT = "demo-psych251";
-const EXPERIMENT_ID = "castiello2026-pilot-a";
+const EXPERIMENT_ID = "castiello2026-pilot-b";
 const FS = `http://localhost:8080/v1/projects/${PROJECT}/databases/(default)/documents`;
 // The Cloud Function (server/index.js) in the Functions emulator, started by `npm test`.
 const CHAT_SERVER = `http://127.0.0.1:5001/${PROJECT}/us-central1/chat`;
@@ -96,16 +96,19 @@ async function chat(page, chatIndex, { total = 24, prefix = "" } = {}) {
   const bubbles = page.locator(".chat-log .chat-msg");
   await expect(bubbles).toHaveCount(1);
   await expect(bubbles.first()).not.toContainText(Castiello.OPENER_TRIGGER);
-  await expect(page.locator(".chat-counter")).toHaveText(`Message 2 of ${total}`);
+  await expect(page.locator(".chat-counter")).toHaveText(`1 of ${total} messages completed`);
   await expect(page.locator(".chat-log .chat-counter")).toHaveCount(0);
-  for (let k = 1; k <= total / 2; k++) await sendMessage(page, `${prefix}c${chatIndex}-m${k}`);
+  await sendMessage(page, `${prefix}c${chatIndex}-m1`);
+  await expect(bubbles).toHaveCount(3); // the participant's message and the bot's reply
+  await expect(page.locator(".chat-counter")).toHaveText(`3 of ${total} messages completed`);
+  for (let k = 2; k <= total / 2; k++) await sendMessage(page, `${prefix}c${chatIndex}-m${k}`);
   await expect(page.locator(".chat-end")).toBeVisible();
   await expect(bubbles).toHaveCount(total);
-  await expect(page.locator(".chat-counter")).toHaveText(`Message ${total} of ${total}`);
+  await expect(page.locator(".chat-counter")).toHaveText(`${total} of ${total} messages completed`);
   await page.getByRole("button", { name: "Continue" }).click();
 }
 
-async function runThroughExperiment(page, { bfi = bfiAnswers(), aff = AFF, finish = true, prefix = "" } = {}) {
+async function runThroughExperiment(page, { bfi = bfiAnswers(), aff = AFF, finish = true, prefix = "", feedback = "I chatted with two bots" } = {}) {
   // 1. consent
   await page.getByRole("button", { name: "I agree to participate" }).click();
   // 2. BFI-44, then the chat service scores it and assigns the bots
@@ -123,6 +126,11 @@ async function runThroughExperiment(page, { bfi = bfiAnswers(), aff = AFF, finis
   await page.locator('input[type="number"]').fill("34");
   await page.getByText("Woman", { exact: true }).click();
   await page.locator('[data-name="native_english"]').getByText("Yes", { exact: true }).first().click();
+  await page.locator('input[value="Continue"]').click();
+  // 7b. optional feedback: answer the first question, leave the second blank
+  await expect(page.getByText("In your own words, what were you asked to do during the chats?")).toBeVisible();
+  await expect(page.getByText("Was anything about the instructions or study confusing? If so, please describe.")).toBeVisible();
+  await page.locator("textarea").first().fill(feedback);
   await page.locator('input[value="Continue"]').click();
   // 8. debrief
   if (!finish) return;
@@ -191,6 +199,18 @@ test.beforeEach(() => {
   test.skip(!EMULATOR, "needs the Firestore emulator: run `npm test`");
 });
 
+// These tests start many sessions in parallel against the real server/config.js, whose study
+// cap is sized for real recruitment (or 0 until it is set). In the emulator only, give the
+// study's session counter a large credit so the suite never reaches the cap; the cap itself is
+// tested in chat-service.spec.js.
+test.beforeAll(async () => {
+  if (!EMULATOR) return;
+  await fetch(`${FS}/experiments/${EXPERIMENT_ID}/private_counters/sessions`, {
+    method: "PATCH", headers: { Authorization: "Bearer owner", "Content-Type": "application/json" },
+    body: JSON.stringify({ fields: { n: { integerValue: "-1000000" } } }),
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -214,7 +234,7 @@ test.describe("experiment", () => {
     const docId = await page.evaluate(() => window.__saver.docId);
 
     const answers = bfiAnswers();
-    await runThroughExperiment(page, { bfi: answers, prefix: "USERMARKER-" });
+    await runThroughExperiment(page, { bfi: answers, prefix: "USERMARKER-", feedback: "FEEDBACKMARKER I chatted with two bots" });
     expect(pageErrors, "uncaught page errors").toEqual([]);
     const stats = await page.evaluate(() => window.__saver.stats);
     expect(stats.writes_failed).toBe(0);
@@ -249,7 +269,7 @@ test.describe("experiment", () => {
     const s = await sessionOf(docId);
     expect(s).toMatchObject({ order: "mirror-first", mirror_name: "Pat", inverse_name: "Alex",
       chat1_name: "Pat", chat1_condition: "mirror", chat2_name: "Alex", chat2_condition: "inverse",
-      attention_check_passed: true, bfi_n_skipped: 2, study_phase: "pilot-a", model_provider: "fake", messages_per_chat: 24 });
+      attention_check_passed: true, bfi_n_skipped: 2, study_phase: "pilot-b", model_provider: "fake", messages_per_chat: 24 });
     const want = expectedTraits(answers);
     for (const t of Object.keys(KEY)) {
       expect(s.mirror_scores[t]).toBeCloseTo(want[t], 10);
@@ -289,6 +309,10 @@ test.describe("experiment", () => {
     expect(aff.affiliation_chat1).toBeCloseTo(1.5, 10);
     expect(aff.affiliation_chat2).toBeCloseTo(-7 / 6, 10);
     expect(aff.affiliation_coded.chat1.distant).toBe(2);
+    // The optional feedback is its own trial, after demographics and before the debrief.
+    const order = trials.map((t) => t.task);
+    expect(order.slice(order.indexOf("demographics"))).toEqual(["demographics", "feedback", "debrief"]);
+    expect(trials.find((t) => t.task === "feedback").response).toEqual({ task_understanding: "FEEDBACKMARKER I chatted with two bots", confusion: null });
 
     // Export: the analysis columns are joined back on, and the chat text and Prolific id land
     // only in the two gitignored files.
@@ -305,10 +329,16 @@ test.describe("experiment", () => {
     expect(t("chat").map((c) => c.bot_condition)).toEqual(["mirror", "inverse"]);
     expect(t("affiliation")[0].affiliation_mirror).toBeCloseTo(1.5, 10);
     expect(t("affiliation")[0].affiliation_inverse).toBeCloseTo(-7 / 6, 10);
+    // Feedback: answered or not, and length, in the public files; the text only in feedback.csv.
+    expect(t("feedback")[0]).toMatchObject({ feedback_task_understanding_answered: true,
+      feedback_task_understanding_n_chars: "FEEDBACKMARKER I chatted with two bots".length,
+      feedback_confusion_answered: false, feedback_confusion_n_chars: 0 });
+    expect(t("feedback")[0].response).toBeUndefined();
     const files = fs.readdirSync(out).sort();
-    expect(files).toEqual(["chat_events.csv", "errors.csv", "export.json", "identifiers.csv", "messages.csv", "participants.csv", "transcripts.csv", "trials.csv"]);
+    expect(files).toEqual(["chat_events.csv", "errors.csv", "export.json", "feedback.csv", "identifiers.csv", "messages.csv", "participants.csv", "transcripts.csv", "trials.csv"]);
     const containing = (marker) => files.filter((f) => fs.readFileSync(path.join(out, f), "utf8").includes(marker));
     expect(containing("USERMARKER")).toEqual(["transcripts.csv"]);
+    expect(containing("FEEDBACKMARKER")).toEqual(["feedback.csv"]);
     expect(containing("PROLIFICMARKER")).toEqual(["identifiers.csv"]);
     expect(containing("Your name is")).toEqual([]);
     const participantsCsv = fs.readFileSync(path.join(out, "participants.csv"), "utf8").split("\n")[0].split(",");

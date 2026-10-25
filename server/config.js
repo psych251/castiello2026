@@ -33,9 +33,13 @@ module.exports = {
   // and the ids in writeup/replication-report.qmd. Add the main study's id when it is chosen.
   // max_sessions caps how many chat sessions each study can ever start (a cost guard: anyone
   // can create anonymous sign-ins). Reloads and abandoned runs count too, so leave headroom
-  // above the planned sample. null = no cap.
+  // above the planned sample. null = no cap; 0 = closed (no new sessions; records are kept).
   experiments: {
-    "castiello2026-pilot-a": { phase: "pilot-a", max_sessions: 40 },
+    // Pilot A (non-naive testers) is finished: closed so no new session can join its data.
+    // Its stored records and exports are unaffected.
+    "castiello2026-pilot-a": { phase: "pilot-a", max_sessions: 0 },
+    // Pilot B (naive Prolific participants): 5 approved, cap twice that, preview session included.
+    "castiello2026-pilot-b": { phase: "pilot-b", max_sessions: 10 },
     "castiello2026-phase2": { phase: "phase2", max_sessions: 200 },
   },
 

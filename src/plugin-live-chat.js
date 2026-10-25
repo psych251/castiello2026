@@ -182,8 +182,9 @@ var jsPsychLiveChat = (function (jspsych) {
         box.append(header, counter, log, status, actions, form);
         display_element.appendChild(box);
 
+        // Visible messages already on screen (seq 1..total; the hidden startup instruction is 0).
         const updateCounter = () => {
-          counter.textContent = "Message " + Math.min(lastSeq + 1, trial.total_messages) + " of " + trial.total_messages;
+          counter.textContent = Math.min(lastSeq, trial.total_messages) + " of " + trial.total_messages + " messages completed";
         };
         const setInputEnabled = (on) => {
           input.disabled = !on;
@@ -224,7 +225,7 @@ var jsPsychLiveChat = (function (jspsych) {
           form.remove();
           actions.innerHTML = "";
           status.textContent = "";
-          counter.textContent = "Message " + trial.total_messages + " of " + trial.total_messages;
+          counter.textContent = trial.total_messages + " of " + trial.total_messages + " messages completed";
           const note = el("div", "chat-end");
           note.appendChild(el("p", null, "Your chat with " + name + " has ended."));
           const next = el("button", "jspsych-btn chat-continue", "Continue");

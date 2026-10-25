@@ -55,6 +55,8 @@ original_paper/
 identifiers.csv
 # Chat text typed by participants (Castiello relay chat): may contain identifying details.
 transcripts.csv
+# Free-text feedback answers (Pilot B feedback questions): may contain identifying details.
+feedback.csv
 
 # OS / editor
 .DS_Store

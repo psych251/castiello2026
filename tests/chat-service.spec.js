@@ -16,13 +16,21 @@ const path = require("path");
 const Castiello = require("../server/castiello.js");
 
 const EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST;
-const EXP = "castiello2026-pilot-a";
+const EXP = "castiello2026-pilot-b";
 const CHAT_SERVER = "http://127.0.0.1:5001/demo-psych251/us-central1/chat"; // the Functions emulator
 const AUTH = "http://127.0.0.1:9099";
 const HIDDEN = /mirror|inverse|openness|conscientiousness|extraversion|agreeableness|neuroticism|prompt|trait|your name is/i;
 
 test.beforeEach(() => {
   test.skip(!EMULATOR, "needs the emulators: run `npm test`");
+});
+
+// The Cloud Function test below runs with the real server/config.js, whose cap for EXP is sized
+// for real recruitment (or 0 until it is set). In the emulator only, credit EXP's session counter
+// so these tests never reach it (experiment.spec.js does the same).
+test.beforeAll(async () => {
+  if (!EMULATOR) return;
+  await adminDb().doc(`experiments/${EXP}/private_counters/sessions`).set({ n: -1000000 });
 });
 
 let db = null;
@@ -132,7 +140,7 @@ test.describe("chat service", () => {
     const want = Castiello.scoreBfi(answers).traits;
     expect(s).toMatchObject({ uid: who.uid, order: "inverse-first", mirror_name: "Alex", inverse_name: "Pat",
       chat1_name: "Pat", chat1_condition: "inverse", chat2_name: "Alex", chat2_condition: "mirror",
-      study_phase: "pilot-a", attention_check_passed: true, bfi_n_skipped: 2, model_provider: "fake" });
+      study_phase: "pilot-b", attention_check_passed: true, bfi_n_skipped: 2, model_provider: "fake" });
     // Chat 1 (Pat) carries the inverse profile, chat 2 (Alex) the participant's own.
     expect(s.chat1_prompt).toBe(Castiello.buildPrompt(Castiello.inverseProfile(want), "Pat"));
     expect(s.chat2_prompt).toBe(Castiello.buildPrompt(want, "Alex"));
@@ -410,6 +418,16 @@ test.describe("chat service", () => {
     const ok = await post(a.token, { participant_id: pidA });
     expect(ok.status).toBe(200);
     expect(await ok.text()).not.toMatch(HIDDEN);
+
+    // Pilot A is closed (max_sessions 0 in server/config.js): the real function refuses any new
+    // session there, while its stored records stay as they are.
+    expect(config.experiments["castiello2026-pilot-a"].max_sessions).toBe(0);
+    const pidClosed = a.uid + "-" + rnd();
+    const closed = await post(a.token, { participant_id: pidClosed, experiment_id: "castiello2026-pilot-a" });
+    expect(closed.status).toBe(403);
+    expect(await closed.json()).toMatchObject({ error: "study_full", retryable: false });
+    const refused = await adminDb().doc(`experiments/castiello2026-pilot-a/participants/${pidClosed}/private/session`).get();
+    expect(refused.exists).toBe(false); // no session, assignment or prompt was created
 
     const pre = (origin) => fetch(`${CHAT_SERVER}/session`, { method: "OPTIONS", headers: { Origin: origin } });
     expect((await pre("http://localhost:8017")).headers.get("access-control-allow-origin")).toBe("http://localhost:8017");

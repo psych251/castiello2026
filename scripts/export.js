@@ -36,6 +36,10 @@
  *   transcripts.csv    the messages WITH the text, from the chat service's own records (so it
  *                      includes chats that were abandoned). GITIGNORED: participants may type
  *                      anything, including identifying details.
+ *   feedback.csv       the optional free-text feedback answers (task "feedback": what the
+ *                      participant understood the task to be, and anything confusing).
+ *                      GITIGNORED, like transcripts.csv. In trials.csv the feedback row keeps
+ *                      only whether each question was answered and its length, never the text.
  *
  * The chat service keeps each participant's assignment, scores and prompts where browsers
  * cannot read them (participants/<id>/private/session). This script joins them back on, so
@@ -140,6 +144,7 @@ function writeCsv(file, rows, firstColumns) {
   const identifiers = [];
   const trials = [];
   const transcripts = [];
+  const feedback = [];
   const chatEvents = [];
   const dump = { experiment_id: experimentId, exported_at: new Date().toISOString(), participants: [] };
 
@@ -206,6 +211,18 @@ function writeCsv(file, rows, firstColumns) {
     // and participants.csv will not join. Analysis columns from the service are added to the
     // rows they belong on.
     const pubTrials = pTrials.map(({ prolific_pid, participant_id, transcript, ...t }) => {
+      // Free-text feedback: the text goes to the private feedback.csv only.
+      if (t.task === "feedback") {
+        const r = t.response || {};
+        feedback.push({ participant_id: uid, trial_index: t.trial_index,
+          task_understanding: r.task_understanding ?? null, confusion: r.confusion ?? null });
+        delete t.response;
+        for (const q of ["task_understanding", "confusion"]) {
+          const text = typeof r[q] === "string" ? r[q].trim() : "";
+          t["feedback_" + q + "_answered"] = text.length > 0;
+          t["feedback_" + q + "_n_chars"] = text.length;
+        }
+      }
       if (!sess) return t;
       if (t.task === "bfi") {
         Object.assign(t, { attention_check_passed: sess.attention_check_passed, bfi_n_skipped: sess.bfi_n_skipped,
@@ -248,6 +265,8 @@ function writeCsv(file, rows, firstColumns) {
   writeCsv(path.join(outDir, "chat_events.csv"), chatEvents, ["participant_id", "event_id", "type", "chat_index", "seq", "attempt", "at", "code"]);
   writeCsv(path.join(outDir, "transcripts.csv"), transcripts, [...chatCols, "text"]);
   console.log("  transcripts.csv is gitignored: it holds what participants typed. Keep it private.");
+  writeCsv(path.join(outDir, "feedback.csv"), feedback, ["participant_id", "trial_index", "task_understanding", "confusion"]);
+  console.log("  feedback.csv is gitignored: it holds participants' free-text feedback. Keep it private.");
   fs.writeFileSync(path.join(outDir, "export.json"), JSON.stringify(dump, null, 2));
   console.log(`  ${path.relative(process.cwd(), path.join(outDir, "export.json"))}`);
   writeCsv(path.join(outDir, "identifiers.csv"), identifiers, ["participant_id", "prolific_pid", "prolific_study_id", "prolific_session_id"]);

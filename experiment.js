@@ -10,7 +10,9 @@
  *           "different" reversed. Saved on the `affiliation` trial as affiliation_mirror and
  *           affiliation_inverse.
  *   Trials: consent, BFI-44 (+1 attention check), task instructions, chat 1 (24 messages),
- *           chat 2 (24 messages), post-chat questionnaire, demographics, debrief.
+ *           chat 2 (24 messages), post-chat questionnaire, demographics, two optional
+ *           free-text feedback questions (added for Pilot B; not part of the paper's design),
+ *           debrief.
  *   Random: order (mirror first / inverse first) x name (mirror is Pat / mirror is Alex),
  *           simple random assignment, drawn by the chat service.
  *   Exclusions (preregistration, applied in the report): fewer than 8 turns in a chat, a
@@ -31,7 +33,7 @@ window.TEMPLATE_VERSION = "0.1.0";
 const EXPERIMENT = {
   // Firestore path: experiments/<id>/participants/... Change it for each phase so pilot and
   // real data never mix. Must match experiment_id in writeup/replication-report.qmd.
-  id: "castiello2026-pilot-a",
+  id: "castiello2026-pilot-b",
 
   // Trials per Firestore write. 1 = save every trial the moment it finishes. This study has
   // only about ten trials, so 1 is well inside the free tier.
@@ -41,7 +43,7 @@ const EXPERIMENT = {
   save_full_data_at_end: true,
 
   // Prolific: if set, participants are redirected to Prolific when they finish.
-  prolific_completion_code: "",
+  prolific_completion_code: "C15R004P",
 
   // Contact shown in consent and debrief.
   contact_email: "stanfordpsych251@gmail.com",
@@ -61,6 +63,12 @@ const EXPERIMENT = {
   // BFI-44: how many of the 44 items a participant may leave blank and still continue
   // (must match max_bfi_skips in server/config.js).
   max_bfi_skips: 5,
+
+  // Two optional free-text questions after demographics, added for Pilot B: what participants
+  // understood the task to be, and anything they found confusing. Not affiliation items and not
+  // used by any exclusion. The answers are exported only to the gitignored feedback.csv. Decide
+  // before the main study whether to keep them.
+  feedback_questions: true,
 };
 
 // True on anything with a mouse, trackpad, or stylus, including laptops with touchscreens.
@@ -430,6 +438,30 @@ if (USE_EMULATOR && URL_PARAMS.get("cc")) EXPERIMENT.prolific_completion_code = 
   };
 
   // -------------------------------------------------------------------------
+  // 7b. Pilot feedback (optional free text; see EXPERIMENT.feedback_questions)
+  // -------------------------------------------------------------------------
+  const feedback = {
+    timeline: [{
+      type: jsPsychSurvey,
+      survey_json: {
+        showQuestionNumbers: "off",
+        widthMode: "responsive",
+        completeText: "Continue",
+        pages: [{
+          elements: [
+            { type: "comment", name: "task_understanding", rows: 3, maxLength: 2000,
+              title: "In your own words, what were you asked to do during the chats?" },
+            { type: "comment", name: "confusion", rows: 3, maxLength: 2000,
+              title: "Was anything about the instructions or study confusing? If so, please describe." },
+          ],
+        }],
+      },
+      data: { task: "feedback" },
+    }],
+    conditional_function: () => EXPERIMENT.feedback_questions,
+  };
+
+  // -------------------------------------------------------------------------
   // 8. Debrief
   // -------------------------------------------------------------------------
   const debrief = {
@@ -456,6 +488,7 @@ if (USE_EMULATOR && URL_PARAMS.get("cc")) EXPERIMENT.prolific_completion_code = 
     ...chatBlock(2),
     affiliation,
     demographics,
+    feedback,
     debrief,
   ]);
 })();

@@ -49,11 +49,19 @@ library(jsonlite)
 
 # Must match EXPERIMENT.id in experiment.js, and the --experiment you passed to the export.
 # Phase 2 runs under its own id, so its data never mix with Phase 1's.
-experiment_id        <- "castiello2026-pilot-a"
+experiment_id        <- "castiello2026-pilot-b"
 experiment_id_phase2 <- "castiello2026-phase2"
-# Label for Phase 1 results in tables and figures: pilot data (run by the researcher and
-# non-naive testers) are never labelled as the replication sample.
-phase1_label <- if (grepl("pilot", experiment_id)) "Pilot A (non-naive testers)" else "Phase 1: replication"
+# Pilot A is kept as its own dataset: shown on its own row of the Key statistics table, never
+# pooled with the data read from experiment_id.
+experiment_id_pilot_a <- "castiello2026-pilot-a"
+# Label for Phase 1 results in tables and figures: pilot data are never labelled as the
+# replication sample, and each pilot keeps its own name.
+phase_label <- function(id) {
+  if (grepl("pilot-a", id)) "Pilot A (non-naive testers)"
+  else if (grepl("pilot-b", id)) "Pilot B (naive participants)"
+  else "Phase 1: replication"
+}
+phase1_label <- phase_label(experiment_id)
 ```
 
 ```{r}
@@ -135,6 +143,18 @@ read_phase <- function(id) {
   messages     <- read_opt("messages.csv")   # chat timing and length, no text
   chat_events  <- read_opt("chat_events.csv")   # failed model attempts, no text
 
+  # Researcher sessions (e.g. the Prolific Preview run) are not participants: they are removed
+  # from every table before anything is counted, so the exclusion rules below are untouched.
+  # researcher_sessions.csv (participant_id, note) lists them; absent means none.
+  researcher <- read_opt("researcher_sessions.csv")
+  researcher_ids <- if (nrow(researcher)) unique(researcher$participant_id) else character()
+  drop_researcher <- function(d) if (nrow(d) && "participant_id" %in% names(d)) filter(d, !participant_id %in% researcher_ids) else d
+  n_researcher <- sum(participants$participant_id %in% researcher_ids)
+  participants <- drop_researcher(participants)
+  trials       <- drop_researcher(trials)
+  messages     <- drop_researcher(messages)
+  chat_events  <- drop_researcher(chat_events)
+
   # Completed = clicked "Finish" on the debrief, or reached the affiliation ratings (saved only
   # after both chats) and closed the page before finishing; the debrief collects no data.
   rated <- trials |> filter(task == "affiliation") |> pull(participant_id) |> unique()
@@ -183,7 +203,8 @@ read_phase <- function(id) {
   keep <- scores |> filter(!excl_turns, !excl_attention, !excl_neutral, !missing_dv)
 
   list(participants = participants, trials = trials, errors = errors, messages = messages,
-       chat_events = chat_events, complete = complete, scores = scores, keep = keep)
+       chat_events = chat_events, complete = complete, scores = scores, keep = keep,
+       n_researcher = n_researcher)
 }
 
 # The key statistic: paired t-test of mirror vs inverse affiliation, d_z with a 95% CI, and the
@@ -251,6 +272,8 @@ affiliation_plot <- function(d) {
 
 phase1 <- read_phase(experiment_id)
 phase2 <- read_phase(experiment_id_phase2)
+# Pilot A, read separately (only when Phase 1 is a later study), for its own Key statistics row.
+pilot_a <- if (experiment_id != experiment_id_pilot_a) read_phase(experiment_id_pilot_a)
 have_data   <- !is.null(phase1)
 have_phase2 <- !is.null(phase2)
 ```
@@ -272,6 +295,7 @@ fmt_row <- function(study, r) {
 }
 bind_rows(
   fmt_row("Original", original),
+  if (experiment_id != experiment_id_pilot_a) fmt_row(phase_label(experiment_id_pilot_a), if (!is.null(pilot_a)) paired_stats(pilot_a)),
   fmt_row(phase1_label, if (have_data) paired_stats(phase1)),
   fmt_row("Phase 2: extension", if (have_phase2) paired_stats(phase2))
 ) |>
@@ -365,7 +389,7 @@ actual sample and any deviation from the plan above.
 if (!have_data) {
   cat(
     "::: {.callout-warning icon=false}\n",
-    "## No Phase 1 data yet\n\n",
+    "## No ", phase1_label, " data yet\n\n",
     "There are no exported data for `", experiment_id, "` yet, so the sample and results ",
     "sections are skipped. This is expected before data collection. Export with ",
     "`npm run export -- --experiment ", experiment_id, " --key <path to your key>` and render again. ",
@@ -427,6 +451,7 @@ scores |>
 cat(sprintf("Of %d participants who started, %d clicked Finish, %d completed the study (reached the affiliation ratings) and %d met the exclusion criteria.",
             nrow(participants), sum(as.logical(participants$completed) %in% TRUE), nrow(complete), nrow(keep)))
 if (nrow(keep) < 2) cat(" Fewer than two participants remain for analysis, so the results below are empty.")
+if (phase1$n_researcher > 0) cat(sprintf(" Not counted above: %d researcher session(s) (researcher_sessions.csv), removed before analysis.", phase1$n_researcher))
 cat("\n")
 ```
 
@@ -781,7 +806,8 @@ have it and the original's otherwise.
 #| label: phase2-power
 phase2_n <- 150   # planned analysed participants in Phase 2 (each chats with both bots)
 
-p1_stats <- if (have_data) paired_stats(phase1)
+# Pilot data are never used as the Phase 1 estimate (too few, and not the replication sample).
+p1_stats <- if (have_data && !grepl("pilot", experiment_id)) paired_stats(phase1)
 basis_d  <- if (!is.null(p1_stats) && !is.na(p1_stats$d)) p1_stats$d else original$d
 basis    <- if (!is.null(p1_stats) && !is.na(p1_stats$d)) "Phase 1" else "the original study"
 

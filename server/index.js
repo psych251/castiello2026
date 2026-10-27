@@ -75,5 +75,8 @@ exports.chat = onRequest(
     getService: getService,
     allowedOrigin: (o) => (IN_EMULATOR ? isLocalOrigin(o) : config.hosting.allowed_origins.includes(o)),
     log: (m) => logger.info("chat service: " + m),
+    // config.suspended refuses everything; only the test suite, in the emulators, may skip it.
+    isSuspended: (req) => config.suspended &&
+      !(IN_EMULATOR && (req.get ? req.get("x-test-ignore-suspension") : req.headers["x-test-ignore-suspension"]) === "1"),
   }),
 );

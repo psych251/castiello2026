@@ -69,6 +69,13 @@ const EXPERIMENT = {
   // used by any exclusion. The answers are exported only to the gitignored feedback.csv. Decide
   // before the main study whether to keep them.
   feedback_questions: true,
+
+  // SUSPENSION (2026-10-27): participant testing is paused pending the protocol director's
+  // review. While true, every visitor sees only "Study temporarily closed": the page stops
+  // before signing in, creating a participant record, consent or the questionnaire. Set false
+  // (and lift `suspended` in server/config.js) to reopen. Only test runs in the local emulators
+  // may skip it, with ?emulator=1&ignore_suspension=1.
+  suspended: true,
 };
 
 // True on anything with a mouse, trackpad, or stylus, including laptops with touchscreens.
@@ -82,11 +89,23 @@ const URL_PARAMS = new URLSearchParams(window.location.search);
 const USE_EMULATOR = URL_PARAMS.get("emulator") === "1";
 const CHUNK_SIZE = Number(URL_PARAMS.get("chunk_size")) || EXPERIMENT.chunk_size;
 if (USE_EMULATOR && URL_PARAMS.get("cc")) EXPERIMENT.prolific_completion_code = URL_PARAMS.get("cc");
+const IGNORE_SUSPENSION = USE_EMULATOR && URL_PARAMS.get("ignore_suspension") === "1";
 
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 (async function main() {
+  // Before anything else: no sign-in, no record, no data.
+  if (EXPERIMENT.suspended && !IGNORE_SUSPENSION) {
+    document.body.innerHTML =
+      '<div id="study-closed" class="jspsych-content" style="max-width:640px;margin:15vh auto;font:16px/1.6 system-ui,sans-serif;">' +
+      "<h2>Study temporarily closed</h2>" +
+      "<p>This study is not running at the moment. Nothing has been recorded. Please close this " +
+      "window" + (EXPERIMENT.prolific_completion_code ? " and return the study on Prolific" : "") + ".</p>" +
+      "<p>Questions: <a href=\"mailto:" + EXPERIMENT.contact_email + "\">" + EXPERIMENT.contact_email + "</a></p></div>";
+    return;
+  }
+
   const C = window.Castiello;
   const deviceSupported = !EXPERIMENT.requires_keyboard || hasFinePointer();
 
@@ -105,7 +124,8 @@ if (USE_EMULATOR && URL_PARAMS.get("cc")) EXPERIMENT.prolific_completion_code = 
   const chatEndpoint = USE_EMULATOR
     ? (URL_PARAMS.get("chat_server") || "http://127.0.0.1:5001/demo-psych251/us-central1/chat")
     : EXPERIMENT.chat_endpoint;
-  const client = new ChatClient({ endpoint: chatEndpoint, saver: saver, experiment_id: EXPERIMENT.id });
+  const client = new ChatClient({ endpoint: chatEndpoint, saver: saver, experiment_id: EXPERIMENT.id,
+    headers: IGNORE_SUSPENSION ? { "X-Test-Ignore-Suspension": "1" } : {} });
   const chatMode = saver.mode === "offline" ? "unavailable: no database connection"
     : !chatEndpoint ? "unavailable: chat service not configured"
     : (await client.health()) ? "live" : "unavailable: chat service unreachable";

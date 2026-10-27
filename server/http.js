@@ -2,7 +2,11 @@
  * The HTTP side of the chat service: turns a request into core.js's handle() and its answer
  * into a response. Used by the Cloud Function (index.js) and, directly, by the tests.
  *
- *   createHttpHandler({ getService, allowedOrigin, log }) -> async (req, res)
+ *   createHttpHandler({ getService, allowedOrigin, log, isSuspended }) -> async (req, res)
+ *
+ * isSuspended(req) true (config.js `suspended`): every request but a CORS preflight gets 503
+ * "study_suspended" before getService() runs, so no sign-in check, database access or model
+ * call happens at all.
  *
  * getService() builds the study service. If the model is not configured it throws a
  * ModelConfigError, and every request (/health included) gets 503 "model_not_configured", so
@@ -14,7 +18,7 @@
  */
 "use strict";
 
-function createHttpHandler({ getService, allowedOrigin, log }) {
+function createHttpHandler({ getService, allowedOrigin, log, isSuspended }) {
   const say = log || (() => {});
 
   return async function handleHttp(req, res) {
@@ -25,12 +29,18 @@ function createHttpHandler({ getService, allowedOrigin, log }) {
     res.set("Cache-Control", "no-store");
     if (origin && allowedOrigin(origin)) {
       res.set("Access-Control-Allow-Origin", origin);
-      res.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+      res.set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Test-Ignore-Suspension");
       res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
       res.set("Vary", "Origin");
     }
     if (req.method === "OPTIONS") {
       res.status(204).send("");
+      return;
+    }
+
+    if (isSuspended && isSuspended(req)) {
+      res.status(503).send(JSON.stringify({ error: "study_suspended", message: "Study temporarily closed.", retryable: false }));
+      say(`${req.method} ${path} 503 suspended ${Date.now() - started}ms`);
       return;
     }
 

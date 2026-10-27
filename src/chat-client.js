@@ -23,6 +23,7 @@
       this.endpoint = String(opts.endpoint || "").replace(/\/$/, "");
       this.saver = opts.saver;
       this.experimentId = opts.experiment_id;
+      this.headers = opts.headers || {}; // test runs only: lets the local emulator skip the suspension
       // Longer than the Cloud Function's own limit (120 s: two 45-second model attempts plus the
       // database work), so the page only gives up after the server has. Giving up earlier would
       // let "Try again" start a second, parallel model call for the same message.
@@ -34,7 +35,7 @@
     async health() {
       if (!this.endpoint) return false;
       try {
-        const r = await fetch(this.endpoint + "/health", { signal: AbortSignal.timeout(5000) });
+        const r = await fetch(this.endpoint + "/health", { headers: this.headers, signal: AbortSignal.timeout(5000) });
         return r.ok;
       } catch (e) {
         return false;
@@ -63,7 +64,7 @@
       try {
         r = await fetch(this.endpoint + path, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          headers: Object.assign({ "Content-Type": "application/json", Authorization: "Bearer " + token }, this.headers),
           body: JSON.stringify(Object.assign({ experiment_id: this.experimentId, participant_id: this.saver.docId }, body)),
           signal: AbortSignal.timeout(this.timeoutMs),
         });

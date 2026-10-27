@@ -28,6 +28,15 @@ function env(name, fallback) {
 }
 
 module.exports = {
+  // SUSPENSION (2026-10-27): participant testing is paused pending the protocol director's
+  // review. While true, the function answers every request (/health, /session and /turn,
+  // including turns of sessions that already exist) with 503 "study_suspended" before it checks
+  // a sign-in, reads or writes the database, or builds a model client, so nothing reaches Gemini.
+  // Stored records, prompts, model settings and billing are untouched. To lift it: set false and
+  // redeploy (and restore the caps below). The local emulators honour it too; only the test
+  // suite may bypass it there (header X-Test-Ignore-Suspension, refused once deployed).
+  suspended: true,
+
   // Only these experiment ids may start chat sessions, so Pilot A and main-study sessions stay
   // apart and a participant cannot invent a new one. Must match EXPERIMENT.id in experiment.js
   // and the ids in writeup/replication-report.qmd. Add the main study's id when it is chosen.
@@ -39,8 +48,10 @@ module.exports = {
     // Its stored records and exports are unaffected.
     "castiello2026-pilot-a": { phase: "pilot-a", max_sessions: 0 },
     // Pilot B (naive Prolific participants): 5 approved, cap twice that, preview session included.
-    "castiello2026-pilot-b": { phase: "pilot-b", max_sessions: 10 },
-    "castiello2026-phase2": { phase: "phase2", max_sessions: 200 },
+    // Suspended 2026-10-27 (see `suspended` above): was max_sessions: 10.
+    "castiello2026-pilot-b": { phase: "pilot-b", max_sessions: 0 },
+    // Suspended 2026-10-27 (see `suspended` above): was max_sessions: 200.
+    "castiello2026-phase2": { phase: "phase2", max_sessions: 0 },
   },
 
   // Each chat ends after this many messages, counting both sides and the bot's opener, as in

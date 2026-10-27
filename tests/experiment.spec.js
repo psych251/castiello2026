@@ -75,8 +75,9 @@ const AFF = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-// Every page load points at the test chat service.
-const url = (qs = "") => "/?emulator=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + (qs ? "&" + qs : "");
+// Every page load points at the test chat service, and skips the suspension (EXPERIMENT.suspended
+// and server/config.js `suspended`), which only test runs in the emulators may do.
+const url = (qs = "") => "/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + (qs ? "&" + qs : "");
 
 async function setSurvey(page, values) {
   await page.waitForFunction((names) => window.__survey && names.every((n) => window.__survey.getQuestionByName(n)), Object.keys(values));
@@ -530,8 +531,20 @@ test.describe("experiment", () => {
     expect((await chatOf(docId)).map((m) => m.seq)).toEqual([0, 1, 2, 3]);
   });
 
+  test("while suspended the page shows only 'Study temporarily closed': no sign-in, record, consent or chat call", async ({ page }) => {
+    const requests = [];
+    page.on("request", (r) => { if (!r.url().startsWith("http://localhost:8017")) requests.push(r.url()); });
+    // As a participant would arrive (no test bypass), with Prolific parameters.
+    await page.goto("/?emulator=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&PROLIFIC_PID=SUSPENDMARKER&STUDY_ID=s1&SESSION_ID=sess1");
+    await expect(page.getByRole("heading", { name: "Study temporarily closed" })).toBeVisible();
+    await page.waitForTimeout(1500); // give any stray sign-in or write time to happen
+    await expect(page.getByRole("button", { name: "I agree to participate" })).toHaveCount(0);
+    expect(await page.evaluate(() => window.__saver)).toBeUndefined();
+    expect(requests).toEqual([]); // nothing sent to Auth, Firestore or the chat service
+  });
+
   test("without a reachable chat service the study stops right after consent", async ({ page }) => {
-    await page.goto("/?emulator=1&chat_server=" + encodeURIComponent("http://127.0.0.1:9"));
+    await page.goto("/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent("http://127.0.0.1:9"));
     await page.waitForFunction(() => window.__saver && window.__saver.docId);
     const docId = await page.evaluate(() => window.__saver.docId);
     await page.getByRole("button", { name: "I agree to participate" }).click();

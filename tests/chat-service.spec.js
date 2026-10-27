@@ -19,6 +19,8 @@ const EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST;
 const EXP = "castiello2026-pilot-b";
 const CHAT_SERVER = "http://127.0.0.1:5001/demo-psych251/us-central1/chat"; // the Functions emulator
 const AUTH = "http://127.0.0.1:9099";
+// The emulated function honours server/config.js `suspended`; tests that need it running say so.
+const BYPASS = { "X-Test-Ignore-Suspension": "1" };
 const HIDDEN = /mirror|inverse|openness|conscientiousness|extraversion|agreeableness|neuroticism|prompt|trait|your name is/i;
 
 test.beforeEach(() => {
@@ -121,6 +123,22 @@ async function playChat(svc, who, chat, total = 24, text = (k) => `c${chat}-m${k
     replies.push(r.body);
   }
   return replies;
+}
+
+// Calls server/index.js once, loaded the way a deployed function would be (not in the emulator).
+function deployedCall(extraEnv, { method = "GET", p = "/health", headers = {} } = {}) {
+  const script = `
+    const { chat } = require(${JSON.stringify(path.join(__dirname, "..", "server", "index.js"))});
+    const res = { headers: {}, set(k, v) { this.headers[k] = v; }, setHeader(k, v) { this.headers[k] = v; },
+      getHeader(k) { return this.headers[k]; }, on() { return this; }, end() {}, status(c) { this.code = c; return this; },
+      send(b) { console.log("RESULT " + JSON.stringify({ code: this.code, body: JSON.parse(b), cors: this.headers["Access-Control-Allow-Origin"] || null })); } };
+    chat({ method: ${JSON.stringify(method)}, path: ${JSON.stringify(p)}, url: ${JSON.stringify(p)},
+      headers: { origin: "http://localhost:8017", ...${JSON.stringify(headers)} },
+      get(h) { return this.headers[h.toLowerCase()]; }, body: {} }, res);`;
+  const env = { ...process.env, ...extraEnv };
+  delete env.FUNCTIONS_EMULATOR;
+  const printed = execFileSync(process.execPath, ["-e", script], { env, encoding: "utf8" });
+  return JSON.parse(printed.split("\n").find((l) => l.startsWith("RESULT ")).slice(7));
 }
 
 test.describe("chat service", () => {
@@ -344,18 +362,9 @@ test.describe("chat service", () => {
 
     // The real function file, loaded the way a deployed function would be (not in the
     // emulator): with the simulated model asked for, it still refuses.
-    const script = `
-      const { chat } = require(${JSON.stringify(path.join(__dirname, "..", "server", "index.js"))});
-      const res = { headers: {}, set(k, v) { this.headers[k] = v; }, setHeader(k, v) { this.headers[k] = v; },
-        getHeader(k) { return this.headers[k]; }, on() { return this; }, end() {}, status(c) { this.code = c; return this; },
-        send(b) { console.log("RESULT " + JSON.stringify({ code: this.code, body: JSON.parse(b), cors: this.headers["Access-Control-Allow-Origin"] || null })); } };
-      chat({ method: "GET", path: "/health", url: "/health", headers: { origin: "http://localhost:8017" },
-        get(h) { return this.headers[h.toLowerCase()]; }, body: {} }, res);`;
-    const env = { ...process.env, CHAT_MODEL_PROVIDER: "fake", FUNCTIONS_EMULATOR: "" };
-    delete env.FUNCTIONS_EMULATOR;
-    const printed = execFileSync(process.execPath, ["-e", script], { env, encoding: "utf8" });
-    const out = JSON.parse(printed.split("\n").find((l) => l.startsWith("RESULT ")).slice(7));
-    expect(out).toMatchObject({ code: 503, body: { error: "model_not_configured" } });
+    const out = deployedCall({ CHAT_MODEL_PROVIDER: "fake" });
+    // While suspended the function refuses before it even builds the model.
+    expect(out).toMatchObject({ code: 503, body: { error: config.suspended ? "study_suspended" : "model_not_configured" } });
     expect(out.cors).toBe(null); // and outside the emulator, localhost pages are not allowed
 
     // `firebase deploy` checks every declared secret in Secret Manager, so the API-key secret is
@@ -372,6 +381,68 @@ test.describe("chat service", () => {
     };
     expect(secretsFor({ CHAT_GEMINI_ACCESS: "vertex", CHAT_VERTEX_PROJECT: "lab", CHAT_VERTEX_LOCATION: "global" })).toEqual({ declared: [], attached: [] });
     expect(secretsFor({ CHAT_GEMINI_ACCESS: "api_key" })).toEqual({ declared: ["GEMINI_API_KEY"], attached: ["GEMINI_API_KEY"] });
+  });
+
+  test("while suspended every route is refused before sign-in, database or model, existing sessions included", async () => {
+    expect(config.suspended).toBe(true);
+    expect(config.experiments["castiello2026-pilot-b"].max_sessions).toBe(0);
+    expect(config.experiments["castiello2026-phase2"].max_sessions).toBe(0);
+
+    // The HTTP layer: the service (sign-in check, database, model) is never even built.
+    let built = 0;
+    const handler = createHttpHandler({
+      getService: () => { built++; throw new Error("must not be called"); },
+      allowedOrigin: () => true,
+      isSuspended: () => true,
+    });
+    for (const [method, p] of [["GET", "/health"], ["POST", "/session"], ["POST", "/turn"], ["GET", "/anything"]]) {
+      const res = fakeResponse();
+      await handler({ method, path: p, headers: { authorization: "Bearer x" }, body: {} }, res);
+      expect(res.statusCode).toBe(503);
+      expect(JSON.parse(res.body)).toEqual({ error: "study_suspended", message: "Study temporarily closed.", retryable: false });
+    }
+    expect(built).toBe(0);
+
+    // The real function in the Functions emulator, as participants would call it (no bypass).
+    // A session started earlier (with the bypass) can no longer get a single reply.
+    const r = await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ returnSecureToken: true }),
+    });
+    const { idToken, localId } = await r.json();
+    const pid = localId + "-" + rnd();
+    const call = (p, body, extra = {}) => fetch(`${CHAT_SERVER}${p}`, {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + idToken, ...extra },
+      body: JSON.stringify({ experiment_id: EXP, participant_id: pid, ...body }),
+    });
+    expect((await call("/session", { bfi: bfiAnswers() }, BYPASS)).status).toBe(200);
+    const counter = async () => (await adminDb().doc(`experiments/${EXP}/private_counters/sessions`).get()).data().n;
+    const before = await counter();
+    const health = await fetch(`${CHAT_SERVER}/health`);
+    expect(health.status).toBe(503);
+    expect(await health.json()).toMatchObject({ error: "study_suspended" });
+    for (const [p, body] of [["/session", { bfi: bfiAnswers() }], ["/turn", { chat_index: 1, seq: 0 }]]) {
+      const res = await call(p, body);
+      expect(res.status).toBe(503);
+      expect(await res.json()).toMatchObject({ error: "study_suspended", retryable: false });
+    }
+    const pid2 = localId + "-" + rnd();
+    expect((await fetch(`${CHAT_SERVER}/session`, {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + idToken },
+      body: JSON.stringify({ experiment_id: "castiello2026-phase2", participant_id: pid2, bfi: bfiAnswers() }),
+    })).status).toBe(503);
+    expect(await chatDocs(pid)).toEqual([]); // no opener request stored, no model reply
+    expect(await events(pid)).toEqual([]);
+    expect(await counter()).toBe(before);
+    expect((await adminDb().doc(`experiments/castiello2026-phase2/participants/${pid2}/private/session`).get()).exists).toBe(false);
+
+    // Loaded as deployed, with the Gemini settings in place: the bypass header is ignored, and the
+    // function stops before building a Gemini client, so no model call can happen.
+    const gemini = { CHAT_MODEL_PROVIDER: "gemini", CHAT_MODEL_ID: "gemini-test-001", CHAT_GEMINI_ACCESS: "vertex",
+      CHAT_VERTEX_PROJECT: "lab", CHAT_VERTEX_LOCATION: "global" };
+    for (const [method, p] of [["GET", "/health"], ["POST", "/session"], ["POST", "/turn"]]) {
+      expect(deployedCall(gemini, { method, p, headers: { "x-test-ignore-suspension": "1" } }))
+        .toMatchObject({ code: 503, body: { error: "study_suspended" } });
+    }
   });
 
   test("questionnaire answers are checked on the server", async () => {
@@ -408,7 +479,7 @@ test.describe("chat service", () => {
     const a = await signUp();
     const b = await signUp();
     const post = (token, body) => fetch(`${CHAT_SERVER}/session`, {
-      method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) },
+      method: "POST", headers: { "Content-Type": "application/json", ...BYPASS, ...(token ? { Authorization: "Bearer " + token } : {}) },
       body: JSON.stringify({ experiment_id: EXP, bfi: bfiAnswers(), ...body }),
     });
     const pidA = a.uid + "-" + rnd();

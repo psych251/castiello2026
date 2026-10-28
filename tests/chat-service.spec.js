@@ -641,33 +641,56 @@ test.describe("chat service", () => {
     for (const text of passes) expect(screenReply(text), text).toEqual({ flagged: false, rules: [], categories: [] });
   });
 
-  test("one deadline per message: a slow call is cancelled, no attempt starts too late, and the page is told it took too long", async () => {
-    // A model that never answers but records being cancelled.
+  test("one deadline per message: the first attempt may use all of it; a call past it is cancelled and the page is told it took too long", async () => {
+    expect(config).toMatchObject({ reply_deadline_ms: 20000, attempt_timeout_ms: 20000, min_attempt_ms: 3000 });
+    // A model that never answers but records being cancelled (deadline scaled down to 1.5 s).
     const aborted = [];
     const slow = { provider: "fake", model_id: "fake-model-1", calls: [],
       generate(req) { this.calls.push(1); return new Promise((resolve) => req.signal.addEventListener("abort", () => { aborted.push(Date.now()); resolve({ text: "late", finish_reason: "STOP" }); })); } };
-    const svc = makeService({ model: slow, config: { reply_deadline_ms: 1500, attempt_timeout_ms: 1000, min_attempt_ms: 400 } });
+    const svc = makeService({ model: slow, config: { reply_deadline_ms: 1500, attempt_timeout_ms: 1500, min_attempt_ms: 400 } });
     const who = newParticipant();
     await svc.call("/session", { participant_id: who.pid, bfi: bfiAnswers() }, who.uid);
     const t0 = Date.now();
     const r = await svc.call("/turn", { participant_id: who.pid, chat_index: 1, seq: 0 }, who.uid);
     const took = Date.now() - t0;
     expect(r).toMatchObject({ status: 503, body: { error: "reply_timeout", retryable: true } });
-    // Attempt 1 gets 1000 ms; attempt 2 gets the 500 ms left (>= 400); then the deadline is reached.
-    expect(slow.calls.length).toBe(2);
-    expect(aborted.length).toBe(2); // both calls were cancelled, so neither can answer later
+    expect(slow.calls.length).toBe(1); // the first attempt had the whole deadline, so no second one
+    expect(aborted.length).toBe(1); // and it was cancelled, so it cannot answer later
     expect(took).toBeLessThan(1500 + 1000); // the deadline, plus the database work
     expect((await chatDocs(who.pid)).filter((d) => d.from === "bot")).toEqual([]); // nothing late was saved
     const ev = await events(who.pid);
-    expect(ev.filter((e) => e.type === "model_failure").map((e) => e.code)).toEqual(["timeout", "timeout"]);
+    expect(ev.filter((e) => e.type === "model_failure").map((e) => e.code)).toEqual(["timeout"]);
     expect(ev.filter((e) => e.type === "reply_deadline").length).toBe(1);
 
-    // With the default settings an ordinary simulated reply is unaffected.
-    const ok = makeService();
+    // A fast failure leaves time for a second attempt within the same deadline.
+    const svc2 = makeService({ config: { reply_deadline_ms: 1500, attempt_timeout_ms: 1500, min_attempt_ms: 400 } });
     const who2 = newParticipant();
-    await ok.call("/session", { participant_id: who2.pid, bfi: bfiAnswers() }, who2.uid);
-    expect((await ok.call("/turn", { participant_id: who2.pid, chat_index: 1, seq: 0 }, who2.uid)).status).toBe(200);
-    expect(config).toMatchObject({ reply_deadline_ms: 15000, attempt_timeout_ms: 9000, min_attempt_ms: 3000 });
+    await svc2.call("/session", { participant_id: who2.pid, bfi: bfiAnswers() }, who2.uid);
+    await svc2.call("/turn", { participant_id: who2.pid, chat_index: 1, seq: 0 }, who2.uid);
+    const ok = await svc2.call("/turn", { participant_id: who2.pid, chat_index: 1, seq: 2, text: "[[fail:1]] synthetic" }, who2.uid);
+    expect(ok.status).toBe(200);
+    expect((await chatDocs(who2.pid)).find((d) => d.seq === 3).attempts).toBe(2);
+  });
+
+  test("with the real settings, replies arriving just after the old 9 s limit are shown, from one call, with nothing duplicated", async () => {
+    test.setTimeout(60000);
+    const svc = makeService(); // real config: 20 s deadline, first attempt may use all of it
+    const who = newParticipant();
+    const turn = (seq, text) => svc.call("/turn", { participant_id: who.pid, chat_index: 1, seq, text }, who.uid);
+    await svc.call("/session", { participant_id: who.pid, bfi: bfiAnswers() }, who.uid);
+    await turn(0);
+    for (const [seq, ms] of [[2, 9300], [4, 10500]]) {
+      const before = svc.model.calls.length;
+      const t0 = Date.now();
+      const r = await turn(seq, `[[slow:${ms}]] synthetic`);
+      expect(r.status, "reply at " + ms + " ms").toBe(200);
+      expect(Date.now() - t0).toBeGreaterThanOrEqual(ms);
+      expect(svc.model.calls.length - before).toBe(1);
+    }
+    const docs = await chatDocs(who.pid);
+    expect(docs.map((d) => d.seq)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(docs.filter((d) => d.from === "bot").every((d) => d.attempts === 1)).toBe(true);
+    expect((await events(who.pid)).filter((e) => e.type === "model_failure")).toEqual([]);
   });
 
   test("after the participant leaves, nothing more is generated, a late reply is never saved as shown, and later turns are refused", async () => {

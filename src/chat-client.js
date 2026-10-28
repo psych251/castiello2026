@@ -25,12 +25,12 @@
       this.experimentId = opts.experiment_id;
       this.headers = opts.headers || {}; // test runs only: lets the local emulator skip the suspension
       this.invite = opts.invite || null; // invite-only studies: sent with /access and /session
-      // Longer than the service's own deadline for a reply (15 s for all attempts, server/config.js
+      // Longer than the service's own deadline for a reply (20 s for all attempts, server/config.js
       // reply_deadline_ms) plus its database work, so the page normally hears the server's answer
       // (a reply, or "took too long") rather than giving up first. If it does give up first, "Try
       // again" repeats the same message: the service never answers one message twice, a repeated
       // request waits for the one already making the reply, and the call limits bound the calls.
-      this.timeoutMs = opts.timeout_ms || 25000;
+      this.timeoutMs = opts.timeout_ms || 30000;
       this.session = null; // { chats: [{ chat_index, bot_name }], messages_per_chat, max_message_chars }
     }
 

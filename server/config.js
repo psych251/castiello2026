@@ -146,8 +146,12 @@ module.exports = {
   // shown) and the participant sees that the reply took too long, with "Try again" (a new
   // deadline, still within limits.max_model_calls_per_reply). A shorter deadline means fewer long
   // waits but more interrupted replies.
-  reply_deadline_ms: 15000,
-  attempt_timeout_ms: 9000,
+  // 2026-10-28, after the researcher walkthrough (R01): with 9 s per attempt, 9 calls were cancelled
+  // and 4 messages needed "Try again" (no filter or provider block involved). Now the first attempt
+  // may use the whole deadline; a second attempt runs only if the first fails or is withheld early,
+  // and only within what is left of the same deadline.
+  reply_deadline_ms: 20000,
+  attempt_timeout_ms: 20000,
   min_attempt_ms: 3000,
 
   // The deployed Cloud Function (index.js). allowed_origins are the pages that may call it from a

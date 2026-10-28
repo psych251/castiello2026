@@ -729,6 +729,36 @@ test.describe("experiment", () => {
       safety_stop_any: true, chat1_ended_reason: "withdrew_after_safety_stop" });
   });
 
+  test("a reply arriving after 10 s is shown without Try again, after an honest waiting note", async ({ page }) => {
+    test.setTimeout(60000);
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await runThroughExperiment(page, { stopInChat: 1 });
+    await sendMessage(page, "[[slow:10500]] synthetic");
+    await expect(page.getByText("is still writing. This is taking longer than usual.")).toBeVisible({ timeout: 12000 });
+    await expect(page.locator('.chat-msg[data-from="bot"]')).toHaveCount(2, { timeout: 15000 });
+    await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+    expect((await chatOf(docId)).map((m) => m.seq)).toEqual([0, 1, 2, 3]);
+  });
+
+  test("leaving while a slow reply (past the old 9 s limit) is pending: it is never shown or saved", async ({ page }) => {
+    test.setTimeout(60000);
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await runThroughExperiment(page, { stopInChat: 1 });
+    await sendMessage(page, "[[slow:9500]] synthetic");
+    await page.waitForTimeout(3000);
+    await page.getByRole("button", { name: "Stop and leave the study" }).click();
+    await page.getByRole("button", { name: "Yes, leave the study" }).click();
+    await expect(page.getByRole("heading", { name: "You have left the study" })).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(8000); // past the slow reply
+    expect(await page.content()).not.toContain("simulated reply");
+    expect((await chatOf(docId)).map((m) => m.seq)).toEqual([0, 1, 2]);
+    expect(await sessionOf(docId)).toMatchObject({ ended_reason: "withdrew" });
+  });
+
   test("a participant can leave while a reply is pending; the late reply is never shown or saved as a message", async ({ page }) => {
     await page.goto(url());
     await page.waitForFunction(() => window.__saver && window.__saver.docId);

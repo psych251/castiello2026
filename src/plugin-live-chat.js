@@ -7,6 +7,9 @@
  * jsPsychLiveChat   one chat with one bot. The bot speaks first: the page asks for the opener
  *                   (hidden message 0), then bot 1, participant 2, bot 3, ... Every message from
  *                   either side is one turn; the chat ends after `total_messages`.
+ *                   "Stop and leave the study" is always offered (ended_reason "withdrew"). If the
+ *                   service's safety check stops the chat, a notice (never a bot message) says so
+ *                   and the participant may continue or leave (ended_reason "safety_stop").
  *
  * The trial data hold counts and timings only. The text of the chat is kept by the service
  * (and exported to the private transcripts file), never in the jsPsych data.
@@ -110,7 +113,7 @@ var jsPsychLiveChat = (function (jspsych) {
       // After this long without a reply, the status line says the reply is taking a while.
       // Live replies take several seconds (about 12 s for an opener and 6 s for a reply in the first
       // synthetic test), so the "still writing" note only appears after a longer wait.
-      slow_after_ms: { type: jspsych.ParameterType.INT, default: 20000 },
+      slow_after_ms: { type: jspsych.ParameterType.INT, default: 10000 },
       // After this many failed tries at the same message, offer to leave the study.
       failures_before_leave: { type: jspsych.ParameterType.INT, default: 3 },
     },
@@ -123,6 +126,10 @@ var jsPsychLiveChat = (function (jspsych) {
       participant_chars: { type: jspsych.ParameterType.INT },
       n_failed_requests: { type: jspsych.ParameterType.INT },
       n_retries: { type: jspsych.ParameterType.INT },
+      // "complete", "failed", "withdrew" (the participant chose to stop, with no intervention
+      // before it), "safety_stop" (the service's safety check ended this chat and the participant
+      // went on), "withdrew_after_safety_stop" (they left from that notice) or "paused" (the
+      // researchers paused the study).
       ended_reason: { type: jspsych.ParameterType.STRING },
       chat_started_at: { type: jspsych.ParameterType.STRING },
       chat_ended_at: { type: jspsych.ParameterType.STRING },
@@ -179,7 +186,12 @@ var jsPsychLiveChat = (function (jspsych) {
         const send = el("button", "jspsych-btn chat-send", "Send");
         send.type = "submit";
         form.append(input, send);
-        box.append(header, counter, log, status, actions, form);
+        // Always available: leave the study. Answers already saved stay saved.
+        const stopRow = el("div", "chat-stop-row");
+        const stop = el("button", "chat-stop", "Stop and leave the study");
+        stop.type = "button";
+        stopRow.appendChild(stop);
+        box.append(header, counter, log, status, actions, form, stopRow);
         display_element.appendChild(box);
 
         // Visible messages already on screen (seq 1..total; the hidden startup instruction is 0).
@@ -203,6 +215,8 @@ var jsPsychLiveChat = (function (jspsych) {
           if (finished) return;
           finished = true;
           clearTimeout(slowTimer);
+          // Leaving early: tell the service, so nothing more is generated or shown for this session.
+          if (reason !== "complete" && reason !== "safety_stop" && trial.client.end) trial.client.end(trial.chat_index, reason);
           const ended = new Date();
           display_element.innerHTML = "";
           resolve({
@@ -221,8 +235,43 @@ var jsPsychLiveChat = (function (jspsych) {
           });
         };
 
+        stop.onclick = () => {
+          if (finished) return;
+          stopRow.innerHTML = "";
+          stopRow.appendChild(el("p", "chat-stop-confirm", "Leave the study now? The answers you have given so far are saved."));
+          const yes = el("button", "jspsych-btn chat-stop-yes", "Yes, leave the study");
+          yes.type = "button";
+          yes.onclick = () => finish("withdrew");
+          const no = el("button", "jspsych-btn chat-stop-no", "Keep chatting");
+          no.type = "button";
+          no.onclick = () => { stopRow.innerHTML = ""; stopRow.appendChild(stop); };
+          stopRow.append(yes, no);
+          yes.focus();
+        };
+
+        // The safety check ended this chat. Shown as a notice from the study, not from the bot.
+        const safetyStop = () => {
+          form.remove();
+          stopRow.remove();
+          actions.innerHTML = "";
+          status.textContent = "";
+          const note = el("div", "chat-end chat-safety-stop");
+          note.appendChild(el("p", null, "This chat has been ended early by the study's automatic check. " +
+            "The answers you have given so far are saved. You can continue with the study, or leave it now."));
+          const next = el("button", "jspsych-btn chat-continue", "Continue");
+          next.type = "button";
+          next.onclick = () => finish("safety_stop");
+          const leave = el("button", "jspsych-btn chat-leave", "Leave the study");
+          leave.type = "button";
+          leave.onclick = () => finish("withdrew_after_safety_stop"); // not the same as choosing to stop unprompted
+          note.append(next, leave);
+          box.appendChild(note);
+          next.focus();
+        };
+
         const endOfChat = () => {
           form.remove();
+          stopRow.remove();
           actions.innerHTML = "";
           status.textContent = "";
           counter.textContent = trial.total_messages + " of " + trial.total_messages + " messages completed";
@@ -259,6 +308,7 @@ var jsPsychLiveChat = (function (jspsych) {
             failuresHere = 0;
             busy = false;
             setStatus("", false);
+            if (res.stopped) return safetyStop();
             if (res.reply) {
               lastSeq = res.reply.seq;
               counts.bot += 1;
@@ -273,8 +323,11 @@ var jsPsychLiveChat = (function (jspsych) {
             counts.failed += 1;
             failuresHere += 1;
             setStatus("", false);
-            if (err && err.retryable) {
-              status.textContent = name + "'s reply didn't arrive.";
+            if (err && err.code === "study_paused") {
+              status.textContent = "The researchers have paused the study, so this chat cannot continue. The answers you have given so far are saved.";
+              actionButton("Leave the study", "chat-leave", () => finish("paused"));
+            } else if (err && err.retryable) {
+              status.textContent = err.code === "reply_timeout" ? name + "'s reply took too long." : name + "'s reply didn't arrive.";
               actionButton("Try again", "chat-retry", () => { counts.retries += 1; request(seq, text); });
               if (failuresHere >= trial.failures_before_leave) {
                 status.textContent = name + "'s reply didn't arrive. You can try again, or leave the study if this keeps happening.";

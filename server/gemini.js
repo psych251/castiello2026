@@ -9,6 +9,8 @@
  *     history, starting with the hidden startup instruction) go as the contents, in order, with
  *     roles "user" and "model". Nothing else is sent: no ids, no other chat.
  *   - Generation settings left null in config.js are not sent, so the model's defaults apply.
+ *   - Safety thresholds are sent only if the study's prompt profile lists them (config.js
+ *     prompt_profiles); otherwise none are sent and the provider's defaults apply.
  *   - One SDK request per attempt: the SDK's own retries are turned off, so core.js's
  *     model_attempts and timeout stay the only retry policy and every failure is logged there.
  *   - A blocked or empty answer comes back as empty text with its finish reason; core.js records
@@ -62,8 +64,13 @@ function createGeminiModel(cfg, deps, ModelConfigError) {
       const request = {
         model: cfg.model_id,
         contents: req.messages.map((m) => ({ role: m.role === "model" ? "model" : "user", parts: [{ text: m.text }] })),
-        config: { systemInstruction: req.system, ...generationConfig(req.generation) },
+        config: { systemInstruction: req.system, ...generationConfig(req.generation),
+          // Sent only when the study's profile sets thresholds; otherwise the provider's defaults apply.
+          ...(Array.isArray(req.safety_settings) && req.safety_settings.length
+            ? { safetySettings: req.safety_settings.map((x) => ({ category: x.category, threshold: x.threshold })) } : {}) },
       };
+      // Cancelled when core.js's deadline for this attempt passes, so a late answer is dropped.
+      if (req.signal) request.config.abortSignal = req.signal;
       const t0 = Date.now();
       let res;
       try {
@@ -93,6 +100,7 @@ function generationConfig(gen) {
   if (gen.temperature != null) out.temperature = gen.temperature;
   if (gen.top_p != null) out.topP = gen.top_p;
   if (gen.max_output_tokens != null) out.maxOutputTokens = gen.max_output_tokens;
+  if (gen.thinking_level != null) out.thinkingConfig = { thinkingLevel: gen.thinking_level };
   return out;
 }
 

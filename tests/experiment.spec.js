@@ -18,7 +18,10 @@ const Castiello = require("../server/castiello.js");
 
 const EMULATOR = process.env.EMULATOR === "1" || !!process.env.FIRESTORE_EMULATOR_HOST;
 const PROJECT = "demo-psych251";
-const EXPERIMENT_ID = "castiello2026-pilot-b";
+const EXPERIMENT_ID = "castiello2026-pilot-c";
+// Pilot C is invite-only. The suite's own invite (made in beforeAll, emulator only) has plenty of uses.
+const TEST_INVITE = "test-invite-" + Math.random().toString(36).slice(2, 12);
+const sha256 = (x) => require("crypto").createHash("sha256").update(x).digest("hex");
 const FS = `http://localhost:8080/v1/projects/${PROJECT}/databases/(default)/documents`;
 // The Cloud Function (server/index.js) in the Functions emulator, started by `npm test`.
 const CHAT_SERVER = `http://127.0.0.1:5001/${PROJECT}/us-central1/chat`;
@@ -77,7 +80,7 @@ const AFF = {
 
 // Every page load points at the test chat service, and skips the suspension (EXPERIMENT.suspended
 // and server/config.js `suspended`), which only test runs in the emulators may do.
-const url = (qs = "") => "/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + (qs ? "&" + qs : "");
+const url = (qs = "") => "/?emulator=1&ignore_suspension=1&invite=" + TEST_INVITE + "&chat_server=" + encodeURIComponent(CHAT_SERVER) + (qs ? "&" + qs : "");
 
 async function setSurvey(page, values) {
   await page.waitForFunction((names) => window.__survey && names.every((n) => window.__survey.getQuestionByName(n)), Object.keys(values));
@@ -109,7 +112,8 @@ async function chat(page, chatIndex, { total = 24, prefix = "" } = {}) {
   await page.getByRole("button", { name: "Continue" }).click();
 }
 
-async function runThroughExperiment(page, { bfi = bfiAnswers(), aff = AFF, finish = true, prefix = "", feedback = "I chatted with two bots" } = {}) {
+// stopInChat: stop once that chat has shown its opener (for tests that go on by hand).
+async function runThroughExperiment(page, { bfi = bfiAnswers(), aff = AFF, finish = true, prefix = "", feedback = "I chatted with two bots", stopInChat = null } = {}) {
   // 1. consent
   await page.getByRole("button", { name: "I agree to participate" }).click();
   // 2. BFI-44, then the chat service scores it and assigns the bots
@@ -117,6 +121,11 @@ async function runThroughExperiment(page, { bfi = bfiAnswers(), aff = AFF, finis
   await page.locator('input[value="Continue"]').click();
   // 3. task instructions
   await page.locator("#jspsych-instructions-next").click();
+  if (stopInChat === 1) {
+    await page.getByRole("button", { name: "Start chat" }).click();
+    await expect(page.locator(".chat-log .chat-msg")).toHaveCount(1);
+    return;
+  }
   // 4–5. two chats
   await chat(page, 1, { prefix });
   await chat(page, 2, { prefix });
@@ -210,6 +219,15 @@ test.beforeAll(async () => {
     method: "PATCH", headers: { Authorization: "Bearer owner", "Content-Type": "application/json" },
     body: JSON.stringify({ fields: { n: { integerValue: "-1000000" } } }),
   });
+  // Pilot C starts paused (default_paused); resume it in the emulator, as a researcher would live.
+  await fetch(`${FS}/experiments/${EXPERIMENT_ID}/private_control/pause`, {
+    method: "PATCH", headers: { Authorization: "Bearer owner", "Content-Type": "application/json" },
+    body: JSON.stringify({ fields: { paused: { booleanValue: false } } }),
+  });
+  await fetch(`${FS}/experiments/${EXPERIMENT_ID}/private_invites/${sha256(TEST_INVITE)}`, {
+    method: "PATCH", headers: { Authorization: "Bearer owner", "Content-Type": "application/json" },
+    body: JSON.stringify({ fields: { label: { stringValue: "TEST" }, max_uses: { integerValue: "1000000" }, uses: { integerValue: "0" }, revoked: { booleanValue: false } } }),
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -248,7 +266,7 @@ test.describe("experiment", () => {
     const turns = fromService.filter((r) => r.path === "/turn").map((r) => JSON.parse(r.req)).map((b) => b.chat_index + "/" + b.seq);
     expect(turns.length).toBe(2 * 13);
     expect(new Set(turns).size).toBe(turns.length);
-    expect(paths.filter((x) => !["/health", "/session", "/turn"].includes(x))).toEqual([]);
+    expect(paths.filter((x) => !["/access", "/health", "/session", "/turn"].includes(x))).toEqual([]);
     expect(paths.filter((x) => x === "/health").length).toBeLessThanOrEqual(1);
     expect(fromService.map((r) => r.text).join("\n")).not.toMatch(HIDDEN);
     // The debrief's own text is left out: it is the researcher's explanation of the design,
@@ -270,7 +288,16 @@ test.describe("experiment", () => {
     const s = await sessionOf(docId);
     expect(s).toMatchObject({ order: "mirror-first", mirror_name: "Pat", inverse_name: "Alex",
       chat1_name: "Pat", chat1_condition: "mirror", chat2_name: "Alex", chat2_condition: "inverse",
-      attention_check_passed: true, bfi_n_skipped: 2, study_phase: "pilot-b", model_provider: "fake", messages_per_chat: 24 });
+      attention_check_passed: true, bfi_n_skipped: 2, study_phase: "pilot-c", model_provider: "fake", messages_per_chat: 24,
+      prompt_version: "castiello2026-exp3-safety-v3", safety_version: "castiello2026-screen-v2", invite_label: "TEST", n_safety_flags: 0 });
+    // The revised prompt: the paper's text (identity clause reworded), then the boundaries, the same for both bots.
+    for (const k of ["chat1_prompt", "chat2_prompt"]) {
+      expect(s[k].endsWith("\n\n" + Castiello.BOUNDARIES_V3)).toBe(true);
+      expect(s[k]).not.toContain("never reveal you are an AI");
+    }
+    // The invite code is never stored on the participant's records (only its hash, on the invite).
+    expect(JSON.stringify(p)).not.toContain(TEST_INVITE);
+    expect(JSON.stringify(s)).not.toContain(TEST_INVITE);
     const want = expectedTraits(answers);
     for (const t of Object.keys(KEY)) {
       expect(s.mirror_scores[t]).toBeCloseTo(want[t], 10);
@@ -336,12 +363,13 @@ test.describe("experiment", () => {
       feedback_confusion_answered: false, feedback_confusion_n_chars: 0 });
     expect(t("feedback")[0].response).toBeUndefined();
     const files = fs.readdirSync(out).sort();
-    expect(files).toEqual(["chat_events.csv", "errors.csv", "export.json", "feedback.csv", "identifiers.csv", "messages.csv", "participants.csv", "transcripts.csv", "trials.csv"]);
+    expect(files).toEqual(["chat_events.csv", "errors.csv", "export.json", "feedback.csv", "identifiers.csv", "messages.csv", "participants.csv", "transcripts.csv", "trials.csv", "withheld_replies.csv"]);
     const containing = (marker) => files.filter((f) => fs.readFileSync(path.join(out, f), "utf8").includes(marker));
     expect(containing("USERMARKER")).toEqual(["transcripts.csv"]);
     expect(containing("FEEDBACKMARKER")).toEqual(["feedback.csv"]);
     expect(containing("PROLIFICMARKER")).toEqual(["identifiers.csv"]);
     expect(containing("Your name is")).toEqual([]);
+    expect(containing(TEST_INVITE)).toEqual([]);
     const participantsCsv = fs.readFileSync(path.join(out, "participants.csv"), "utf8").split("\n")[0].split(",");
     for (const col of ["participant_id", "completed", "order"]) expect(participantsCsv).toContain(col);
 
@@ -456,7 +484,7 @@ test.describe("experiment", () => {
     await sendMessage(page, "[[fail:3]] hello there");
     await expect(page.getByText(/reply didn't arrive/)).toBeVisible({ timeout: 30000 });
     await expect(page.locator(".chat-input")).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Leave the study" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Leave the study", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Try again" }).click();
     await expect(page.locator(".chat-bot")).toHaveCount(2);
     await expect(page.locator(".chat-participant")).toHaveCount(1);
@@ -480,11 +508,21 @@ test.describe("experiment", () => {
     for (let i = 0; i < 2; i++) {
       await page.getByRole("button", { name: "Try again" }).click();
     }
-    await page.getByRole("button", { name: "Leave the study" }).click();
-    await expect(page.getByText("The chat stopped working")).toBeVisible({ timeout: 30000 });
+    // The call limit is reached (4 calls): the service says not to retry, and the page agrees.
+    await expect(page.getByText("Something went wrong with this chat, so it cannot continue.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Leave the study", exact: true }).click();
+    // The technical-failure exit: why, the true saving status, the debrief's explanation, the contact.
+    await expect(page.getByRole("heading", { name: "The chat could not continue" })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText("A technical problem stopped the chat")).toBeVisible();
+    await expect(page.locator(".early-exit-saving")).toHaveText("Your answers up to this point have been saved. Nothing after this point was recorded.");
+    await expect(page.getByText("This study investigates if people have different feelings of connection")).toBeVisible();
+    await expect(page.locator('#finish-message a[href^="mailto:"]')).toHaveCount(1);
+    await expect(page.getByText(/completion code/i)).toHaveCount(0);
     await page.evaluate(() => window.__saver._settle());
     const p = await participantDoc(docId);
-    expect(p).toMatchObject({ completed: false, ended_early: "chat_failed", chat_status: "chat1_failed" });
+    expect(p).toMatchObject({ completed: false, ended_early: "chat_failed", chat_status: "chat1_failed", chat1_ended_reason: "failed" });
+    expect(await sessionOf(docId)).toMatchObject({ ended_reason: "failed", ended_in_chat: 1 }); // nothing more is generated
     const chatRow = (await trialsOf(docId)).find((t) => t.task === "chat");
     expect(chatRow).toMatchObject({ ended_reason: "failed", n_failed_requests: 3, n_retries: 2, n_participant_messages: 1 });
   });
@@ -531,11 +569,40 @@ test.describe("experiment", () => {
     expect((await chatOf(docId)).map((m) => m.seq)).toEqual([0, 1, 2, 3]);
   });
 
+  test("away from localhost the page ignores emulator, bypass and test parameters", async ({ browser }) => {
+    // The test site under another name, as the published site would be: every request that is not
+    // to that name is aborted, so nothing can reach the live project or the emulators.
+    const { chromium } = require("@playwright/test");
+    const b = await chromium.launch({ args: ["--host-resolver-rules=MAP not-localhost.test 127.0.0.1"],
+      ...(process.env.PLAYWRIGHT_CHROMIUM_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } : {}) });
+    try {
+      const page = await b.newPage();
+      const outside = [];
+      await page.route("**/*", (r) => {
+        const u = new URL(r.request().url());
+        if (u.hostname === "not-localhost.test") return r.continue();
+        outside.push(u.host);
+        return r.abort();
+      });
+      await page.goto("http://not-localhost.test:8017/?emulator=1&ignore_suspension=1&invite=" + TEST_INVITE +
+        "&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&order=mirror-first&cc=XYZ");
+      await page.waitForTimeout(3000);
+      // Not emulator mode: no emulator banner, and nothing was sent to the emulators or the test chat service.
+      await expect(page.getByText("Emulator mode")).toHaveCount(0);
+      expect(outside.filter((h) => /^(127\.0\.0\.1|localhost)(:|$)/.test(h))).toEqual([]);
+      // It went to the live chat service instead (aborted here), as a published page would.
+      expect(outside.some((h) => h.endsWith("cloudfunctions.net"))).toBe(true);
+    } finally {
+      await b.close();
+    }
+  });
+
   test("while suspended the page shows only 'Study temporarily closed': no sign-in, record, consent or chat call", async ({ page }) => {
     const requests = [];
     page.on("request", (r) => { if (!r.url().startsWith("http://localhost:8017")) requests.push(r.url()); });
     // As a participant would arrive (no test bypass), with Prolific parameters.
-    await page.goto("/?emulator=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&PROLIFIC_PID=SUSPENDMARKER&STUDY_ID=s1&SESSION_ID=sess1");
+    // (EXPERIMENT.suspended is false while Pilot C runs; test_suspended=1 turns it on, locally only.)
+    await page.goto("/?emulator=1&test_suspended=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&PROLIFIC_PID=SUSPENDMARKER&STUDY_ID=s1&SESSION_ID=sess1");
     await expect(page.getByRole("heading", { name: "Study temporarily closed" })).toBeVisible();
     await page.waitForTimeout(1500); // give any stray sign-in or write time to happen
     await expect(page.getByRole("button", { name: "I agree to participate" })).toHaveCount(0);
@@ -543,18 +610,172 @@ test.describe("experiment", () => {
     expect(requests).toEqual([]); // nothing sent to Auth, Firestore or the chat service
   });
 
-  test("without a reachable chat service the study stops right after consent", async ({ page }) => {
-    await page.goto("/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent("http://127.0.0.1:9"));
+  test("without a reachable chat service an invite-only study stops before sign-in, saving nothing", async ({ page }) => {
+    const outside = [];
+    page.on("request", (r) => { if (!r.url().startsWith("http://localhost:8017")) outside.push(new URL(r.url()).port + new URL(r.url()).pathname); });
+    await page.goto("/?emulator=1&ignore_suspension=1&invite=" + TEST_INVITE + "&chat_server=" + encodeURIComponent("http://127.0.0.1:9"));
+    await expect(page.getByRole("heading", { name: "Study unavailable" })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole("button", { name: "I agree to participate" })).toHaveCount(0);
+    expect(await page.evaluate(() => window.__saver)).toBeUndefined();
+    expect(outside).toEqual(["9/access"]); // nothing to Auth or Firestore
+  });
+
+  test("invite-only: without a valid invite the page stops before sign-in, and the code never stays in the address", async ({ page }) => {
+    const outside = [];
+    page.on("request", (r) => { if (!r.url().startsWith("http://localhost:8017")) outside.push(new URL(r.url()).pathname); });
+    for (const qs of ["", "&invite=not-a-real-invite"]) {
+      outside.length = 0;
+      await page.goto("/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + qs);
+      await expect(page.getByRole("heading", { name: "This link cannot be used" })).toBeVisible();
+      await page.waitForTimeout(500);
+      expect(await page.evaluate(() => window.__saver)).toBeUndefined();
+      expect(outside.every((x) => x.endsWith("/access"))).toBe(true); // no sign-in, no database
+      expect(page.url()).not.toContain("invite=");
+    }
+    // A valid invite gets in, and the code is gone from the address before anything is saved.
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    expect(page.url()).not.toContain(TEST_INVITE);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await page.evaluate(() => window.__saver._settle());
+    expect(JSON.stringify(await participantDoc(docId))).not.toContain(TEST_INVITE);
+  });
+
+  test("a participant can stop during a chat; what they answered stays saved and the study ends as withdrawn", async ({ page }) => {
+    await page.goto(url());
     await page.waitForFunction(() => window.__saver && window.__saver.docId);
     const docId = await page.evaluate(() => window.__saver.docId);
-    await page.getByRole("button", { name: "I agree to participate" }).click();
-    await expect(page.getByText("The chat cannot connect")).toBeVisible();
-    await page.getByRole("button", { name: "Close" }).click();
-    await expect(page.getByText("study cannot continue")).toBeVisible({ timeout: 15000 });
+    await runThroughExperiment(page, { stopInChat: 1 });
+    await page.getByRole("button", { name: "Stop and leave the study" }).click();
+    await page.getByRole("button", { name: "Keep chatting" }).click(); // changing their mind is fine
+    await page.getByRole("button", { name: "Stop and leave the study" }).click();
+    await page.getByRole("button", { name: "Yes, leave the study" }).click();
+    await expect(page.getByRole("heading", { name: "You have left the study" })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("You chose to stop the study.")).toBeVisible();
+    await expect(page.getByText("This study investigates if people have different feelings of connection")).toBeVisible();
     await page.evaluate(() => window.__saver._settle());
-    const p = await participantDoc(docId);
-    expect(p).toMatchObject({ completed: false, ended_early: "chat_unavailable", chat_mode: "unavailable: chat service unreachable" });
-    expect(await sessionOf(docId)).toBe(null);
+    expect(await participantDoc(docId)).toMatchObject({ completed: false, ended_early: "withdrew", chat_status: "chat1_withdrew" });
+    const trials = await trialsOf(docId);
+    expect(trials.find((t) => t.task === "bfi")).toBeTruthy(); // saved before they left
+    expect(trials.find((t) => t.task === "chat")).toMatchObject({ chat_index: 1, ended_reason: "withdrew" });
+    expect(trials.find((t) => t.task === "affiliation")).toBeUndefined();
+  });
+
+  test("a reply the safety check withholds is never shown; after two, the chat stops with a notice and the study goes on", async ({ page }) => {
+    const seen = [];
+    page.on("response", async (r) => { if (r.url().startsWith(CHAT_SERVER)) seen.push(await r.text().catch(() => "")); });
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await runThroughExperiment(page, { stopInChat: 1 });
+    // One withheld reply: a clean regenerated reply is shown in its place.
+    await sendMessage(page, "first [[unsafe:1]]");
+    await expect(page.locator('.chat-msg[data-from="bot"]')).toHaveCount(2);
+    // Two: the chat ends with the study's notice, not a bot message.
+    await sendMessage(page, "second [[unsafe:2]]");
+    await expect(page.getByText("ended early by the study's automatic check")).toBeVisible();
+    await expect(page.locator('.chat-msg[data-from="bot"]')).toHaveCount(2);
+    expect(await page.content()).not.toContain("pathetic");
+    expect(seen.join("\n")).not.toContain("pathetic"); // not in any response the page received
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByText("Your second chat")).toBeVisible();
+    await page.evaluate(() => window.__saver._settle());
+    const s = await sessionOf(docId);
+    expect(s.n_safety_flags).toBe(3);
+    expect(s.chat1_safety_stopped_at).toBeTruthy();
+    const chat1 = (await chatOf(docId)).filter((m) => m.chat_index === 1);
+    expect(chat1.map((m) => m.seq)).toEqual([0, 1, 2, 3, 4]); // the stopped reply (5) was never saved as a message
+    expect(chat1.find((m) => m.seq === 3).n_withheld_before).toBe(1);
+    expect(chat1.map((m) => m.text).join("\n")).not.toContain("pathetic");
+    const withheld = await fsList(`experiments/${EXPERIMENT_ID}/participants/${docId}/withheld`);
+    expect(withheld.length).toBe(3);
+    expect(withheld.every((w) => w.text.includes("pathetic") && w.categories.includes("insult"))).toBe(true);
+    const events = await fsList(`experiments/${EXPERIMENT_ID}/participants/${docId}/chat_events`);
+    expect(events.filter((e) => e.type === "safety_flag").length).toBe(3);
+    expect(events.filter((e) => e.type === "safety_stop").length).toBe(1);
+    expect(events.every((e) => !JSON.stringify(e).includes("pathetic"))).toBe(true); // events hold no text
+    const trials = await trialsOf(docId);
+    expect(trials.find((t) => t.task === "chat")).toMatchObject({ chat_index: 1, ended_reason: "safety_stop" });
+
+    // Finish the study: the survey counts as completed, and the stop and the shortened exposure
+    // stay on the record after every later step.
+    await chat(page, 2);
+    await setSurvey(page, AFF);
+    await page.locator('input[value="Continue"]').click();
+    await page.locator('input[type="number"]').fill("34");
+    await page.getByText("Woman", { exact: true }).click();
+    await page.locator('[data-name="native_english"]').getByText("Yes", { exact: true }).first().click();
+    await page.locator('input[value="Continue"]').click();
+    await page.locator('input[value="Continue"]').click(); // feedback left blank
+    await page.getByRole("button", { name: "Finish" }).click();
+    await expect(page.getByText("All done")).toBeVisible({ timeout: 30000 });
+    expect(await participantDoc(docId)).toMatchObject({ completed: true, chat_status: "done", safety_stop_any: true,
+      chat1_ended_reason: "safety_stop", chat1_n_messages: 4, chat2_ended_reason: "complete", chat2_n_messages: 24 });
+  });
+
+  test("leaving from the safety notice is recorded apart from an unprompted withdrawal, and later steps never erase a stop", async ({ page }) => {
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await runThroughExperiment(page, { stopInChat: 1 });
+    await sendMessage(page, "synthetic [[unsafe:2]]");
+    await expect(page.getByText("ended early by the study's automatic check")).toBeVisible();
+    await page.locator(".chat-safety-stop").getByRole("button", { name: "Leave the study", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "You have left the study" })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("You left after the chat was ended early by the study's automatic check.")).toBeVisible();
+    await expect(page.getByText("This study investigates if people have different feelings of connection")).toBeVisible(); // debriefed
+    await page.evaluate(() => window.__saver._settle());
+    expect(await participantDoc(docId)).toMatchObject({ completed: false, ended_early: "withdrew_after_safety_stop",
+      safety_stop_any: true, chat1_ended_reason: "withdrew_after_safety_stop" });
+  });
+
+  test("a participant can leave while a reply is pending; the late reply is never shown or saved as a message", async ({ page }) => {
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await runThroughExperiment(page, { stopInChat: 1 });
+    await sendMessage(page, "[[slow:2500]] synthetic");
+    await expect(page.locator(".chat-status.chat-waiting")).toBeVisible(); // the waiting indicator
+    await page.getByRole("button", { name: "Stop and leave the study" }).click(); // available while waiting
+    await page.getByRole("button", { name: "Yes, leave the study" }).click();
+    await expect(page.getByRole("heading", { name: "You have left the study" })).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(3500); // past the slow reply
+    expect(await page.content()).not.toContain("simulated reply");
+    const s = await sessionOf(docId);
+    expect(s).toMatchObject({ ended_reason: "withdrew", ended_in_chat: 1 });
+    expect((await chatOf(docId)).map((m) => m.seq)).toEqual([0, 1, 2]);
+  });
+
+  test("a reply past the deadline is reported as taking too long, with Try again", async ({ page }) => {
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    await runThroughExperiment(page, { stopInChat: 1 });
+    await page.route(CHAT_SERVER + "/turn", (route) => route.fulfill({ status: 503, contentType: "application/json",
+      body: JSON.stringify({ error: "reply_timeout", message: "The reply took too long. Please try again.", retryable: true }) }));
+    await sendMessage(page, "hello");
+    await expect(page.getByText(/reply took too long/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+    await page.unroute(CHAT_SERVER + "/turn");
+    await page.getByRole("button", { name: "Try again" }).click();
+    await expect(page.locator('.chat-msg[data-from="bot"]')).toHaveCount(2);
+  });
+
+  test("if the researchers pause the study mid-chat, the participant is told and can leave", async ({ page }) => {
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await runThroughExperiment(page, { stopInChat: 1 });
+    // The pause itself is tested in chat-service.spec.js (it is study-wide, and these tests run in
+    // parallel); here the service's answer is stood in for.
+    await page.route(CHAT_SERVER + "/turn", (route) => route.fulfill({ status: 503, contentType: "application/json",
+      body: JSON.stringify({ error: "study_paused", message: "paused", retryable: false }) }));
+    await sendMessage(page, "hello");
+    await expect(page.getByText("The researchers have paused the study")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+    await page.locator(".chat-actions").getByRole("button", { name: "Leave the study", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "You have left the study" })).toBeVisible({ timeout: 15000 });
+    await page.evaluate(() => window.__saver._settle());
+    expect(await participantDoc(docId)).toMatchObject({ completed: false, ended_early: "paused" });
   });
 
   test("chunked writes (chunk_size > 1) save every trial, and inverse-first is exported correctly", async ({ page }) => {

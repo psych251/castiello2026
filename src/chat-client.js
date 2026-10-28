@@ -24,10 +24,13 @@
       this.saver = opts.saver;
       this.experimentId = opts.experiment_id;
       this.headers = opts.headers || {}; // test runs only: lets the local emulator skip the suspension
-      // Longer than the Cloud Function's own limit (120 s: two 45-second model attempts plus the
-      // database work), so the page only gives up after the server has. Giving up earlier would
-      // let "Try again" start a second, parallel model call for the same message.
-      this.timeoutMs = opts.timeout_ms || 125000;
+      this.invite = opts.invite || null; // invite-only studies: sent with /access and /session
+      // Longer than the service's own deadline for a reply (15 s for all attempts, server/config.js
+      // reply_deadline_ms) plus its database work, so the page normally hears the server's answer
+      // (a reply, or "took too long") rather than giving up first. If it does give up first, "Try
+      // again" repeats the same message: the service never answers one message twice, a repeated
+      // request waits for the one already making the reply, and the call limits bound the calls.
+      this.timeoutMs = opts.timeout_ms || 25000;
       this.session = null; // { chats: [{ chat_index, bot_name }], messages_per_chat, max_message_chars }
     }
 
@@ -42,10 +45,39 @@
       }
     }
 
+    /**
+     * Before signing in: is the study open, and is this invite valid? Sends no sign-in token and
+     * writes nothing. Resolves { ok: true } or { ok: false, code }.
+     */
+    async access() {
+      if (!this.endpoint) return { ok: false, code: "not_configured" };
+      try {
+        const r = await fetch(this.endpoint + "/access", {
+          method: "POST",
+          headers: Object.assign({ "Content-Type": "application/json" }, this.headers),
+          body: JSON.stringify({ experiment_id: this.experimentId, invite: this.invite || undefined }),
+          signal: AbortSignal.timeout(10000),
+        });
+        let json = {};
+        try { json = await r.json(); } catch (e) { /* not JSON */ }
+        return r.ok ? { ok: true } : { ok: false, code: json.error || "http_" + r.status };
+      } catch (e) {
+        return { ok: false, code: "network" };
+      }
+    }
+
     /** Send the BFI answers; the service scores them and assigns the bots. */
     async startSession(bfiAnswers, force) {
-      this.session = await this._post("/session", { bfi: bfiAnswers, force: force || undefined });
+      this.session = await this._post("/session", { bfi: bfiAnswers, invite: this.invite || undefined, force: force || undefined });
       return this.session;
+    }
+
+    /**
+     * The participant left: the service makes no further model call for this session and never
+     * saves a late reply as shown. Best effort (keepalive, so it survives the page closing).
+     */
+    end(chatIndex, reason) {
+      return this._post("/end", { chat_index: chatIndex, reason: reason }, { keepalive: true }).catch(() => null);
     }
 
     /** One participant message (seq 0 = ask for the opener). Resolves { reply: { seq, text } | null, done }. */
@@ -53,7 +85,7 @@
       return this._post("/turn", { chat_index: chatIndex, seq: seq, text: text });
     }
 
-    async _post(path, body) {
+    async _post(path, body, extra) {
       let token;
       try {
         token = await this.saver.getIdToken();
@@ -67,6 +99,7 @@
           headers: Object.assign({ "Content-Type": "application/json", Authorization: "Bearer " + token }, this.headers),
           body: JSON.stringify(Object.assign({ experiment_id: this.experimentId, participant_id: this.saver.docId }, body)),
           signal: AbortSignal.timeout(this.timeoutMs),
+          keepalive: !!(extra && extra.keepalive),
         });
       } catch (e) {
         const timedOut = e && (e.name === "TimeoutError" || e.name === "AbortError");
@@ -74,7 +107,10 @@
       }
       let json = {};
       try { json = await r.json(); } catch (e) { /* not JSON */ }
-      if (!r.ok) throw new ChatError(r.status, json.error || "http_" + r.status, json.message || "Request failed.", !!json.retryable || r.status >= 500);
+      // The service's own `retryable` decides (e.g. a reply past its call limit is a 503 that must not
+      // be retried); only an answer without one falls back to "5xx may be retried".
+      const retryable = typeof json.retryable === "boolean" ? json.retryable : r.status >= 500;
+      if (!r.ok) throw new ChatError(r.status, json.error || "http_" + r.status, json.message || "Request failed.", retryable);
       return json;
     }
   }

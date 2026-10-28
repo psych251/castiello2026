@@ -31,6 +31,7 @@ const { createGeminiModel } = require("./gemini.js");
 //   [[fail:N]]    the first N attempts at this reply fail (then it succeeds)
 //   [[slow:MS]]   wait MS milliseconds before replying
 //   [[blocked]]   return an empty reply, as a safety filter would
+//   [[unsafe:N]]  the first N attempts at this reply are text the safety check flags (safety.js)
 function createFakeModel(cfg) {
   const failuresSeen = new Map();
   const log = (cfg && cfg.log) || (() => {});
@@ -46,6 +47,13 @@ function createFakeModel(cfg) {
         const n = (failuresSeen.get(key) || 0) + 1;
         failuresSeen.set(key, n);
         if (n <= Number(fail[1])) throw Object.assign(new Error("simulated model failure " + n), { code: "simulated_failure" });
+      }
+      const unsafe = /\[\[unsafe:(\d+)\]\]/.exec(last.text);
+      if (unsafe) {
+        const key = "unsafe" + JSON.stringify([req.system, req.messages]);
+        const n = (failuresSeen.get(key) || 0) + 1;
+        failuresSeen.set(key, n);
+        if (n <= Number(unsafe[1])) return { text: "(simulated) Ugh, you're pathetic. Just leave me alone.", finish_reason: "STOP", model_version: "fake-model-1" };
       }
       const slow = /\[\[slow:(\d+)\]\]/.exec(last.text);
       await new Promise((r) => setTimeout(r, slow ? Number(slow[1]) : 20));

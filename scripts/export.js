@@ -32,7 +32,11 @@
  *                      then the 24 visible messages (seq 1-24). Message counts
  *                      (chat*_n_messages, server_n_messages) leave seq 0 out; filter
  *                      from != "system" when counting from this file.
- *   chat_events.csv    failed or empty model replies (no message text). Safe to commit.
+ *   chat_events.csv    failed, empty or withheld model replies, call limits and safety stops
+ *                      (no message text; withheld replies give only rule ids). Safe to commit.
+ *   withheld_replies.csv  the text of bot replies the safety check withheld (server/safety.js),
+ *                      never shown to the participant. GITIGNORED, like transcripts.csv: kept for
+ *                      review of the safeguard, and may echo what participants typed.
  *   transcripts.csv    the messages WITH the text, from the chat service's own records (so it
  *                      includes chats that were abandoned). GITIGNORED: participants may type
  *                      anything, including identifying details.
@@ -46,7 +50,8 @@
  * the columns the analysis uses are where they always were: order and the bot conditions in
  * participants.csv, trait_* on the BFI row, bot_condition on each chat row, and
  * affiliation_mirror / affiliation_inverse on the affiliation row. The prompts themselves are
- * not exported (they are rebuilt from the scores by server/castiello.js).
+ * not exported (they are rebuilt from the scores by server/castiello.js, from the version named
+ * in prompt_version).
  */
 const fs = require("fs");
 const path = require("path");
@@ -146,6 +151,7 @@ function writeCsv(file, rows, firstColumns) {
   const transcripts = [];
   const feedback = [];
   const chatEvents = [];
+  const withheld = [];
   const dump = { experiment_id: experimentId, exported_at: new Date().toISOString(), participants: [] };
 
   for (const pDoc of participantsSnap.docs) {
@@ -169,6 +175,7 @@ function writeCsv(file, rows, firstColumns) {
     const { full_data, prolific_pid, prolific_study_id, prolific_session_id, url_params, ...rest } = p;
     identifiers.push({ participant_id: uid, prolific_pid, prolific_study_id, prolific_session_id,
       url_params, started_at: rest.started_at, completed: rest.completed });
+    // (invite_label, for invite-only pilots, is added to this row below: it names a tester.)
     // The chat service's private records. They win over any same-named field on the
     // participant document, which the participant's own browser is allowed to write.
     const sessSnap = await pDoc.ref.collection("private").doc("session").get();
@@ -177,6 +184,8 @@ function writeCsv(file, rows, firstColumns) {
     const chatMsgs = chatSnap.docs.map((d) => plain(d.data())).sort((a, b) => a.chat_index - b.chat_index || a.seq - b.seq);
     const eventSnap = await pDoc.ref.collection("chat_events").get();
     for (const d of eventSnap.docs) chatEvents.push({ participant_id: uid, event_id: d.id, ...plain(d.data()) });
+    const withheldSnap = await pDoc.ref.collection("withheld").get();
+    for (const d of withheldSnap.docs) withheld.push({ participant_id: uid, record_id: d.id, ...plain(d.data()) });
 
     const conditionOf = (chat) => (sess ? sess["chat" + chat + "_condition"] : null);
     const shown = (chat) => chatMsgs.filter((m) => m.chat_index === chat && m.seq >= 1).length;
@@ -192,7 +201,11 @@ function writeCsv(file, rows, firstColumns) {
       chat1_n_messages: shown(1), chat2_n_messages: shown(2),
       chat1_complete: !!sess.chat1_completed_at, chat2_complete: !!sess.chat2_completed_at,
       n_model_failures: sess.n_model_failures || 0,
+      safety_version: sess.safety_version || null, model_safety_settings: sess.model_safety_settings || null,
+      n_safety_flags: sess.n_safety_flags || 0,
+      chat1_safety_stopped: !!sess.chat1_safety_stopped_at, chat2_safety_stopped: !!sess.chat2_safety_stopped_at,
     } : { chat1_complete: false, chat2_complete: false };
+    if (sess && sess.invite_label) identifiers[identifiers.length - 1].invite_label = sess.invite_label;
     if (rest.completed && !(sessionFields.chat1_complete && sessionFields.chat2_complete)) {
       console.warn(`  warning: ${uid}: marked completed, but the chat service does not show both chats finished`);
     }
@@ -203,6 +216,7 @@ function writeCsv(file, rows, firstColumns) {
         received_at: m.received_at, created_at: m.created_at, latency_ms: m.latency_ms, total_ms: m.total_ms,
         attempts: m.attempts, model_provider: m.model_provider, model_id: m.model_id,
         model_version: m.model_version, finish_reason: m.finish_reason,
+        safety_version: m.safety_version ?? null, n_withheld_before: m.n_withheld_before ?? null,
       });
     }
 
@@ -265,6 +279,8 @@ function writeCsv(file, rows, firstColumns) {
   writeCsv(path.join(outDir, "chat_events.csv"), chatEvents, ["participant_id", "event_id", "type", "chat_index", "seq", "attempt", "at", "code"]);
   writeCsv(path.join(outDir, "transcripts.csv"), transcripts, [...chatCols, "text"]);
   console.log("  transcripts.csv is gitignored: it holds what participants typed. Keep it private.");
+  writeCsv(path.join(outDir, "withheld_replies.csv"), withheld, ["participant_id", "chat_index", "seq", "attempt", "categories", "rules", "text"]);
+  console.log("  withheld_replies.csv is gitignored: it holds bot replies the safety check withheld. Keep it private.");
   writeCsv(path.join(outDir, "feedback.csv"), feedback, ["participant_id", "trial_index", "task_understanding", "confusion"]);
   console.log("  feedback.csv is gitignored: it holds participants' free-text feedback. Keep it private.");
   fs.writeFileSync(path.join(outDir, "export.json"), JSON.stringify(dump, null, 2));

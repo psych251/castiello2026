@@ -11,6 +11,8 @@
     "emulators": "firebase emulators:start --only auth,firestore,functions --project demo-psych251",
     "test": "firebase emulators:exec --only auth,firestore,functions --project demo-psych251 \"playwright test\"",
     "export": "node scripts/export.js",
+    "pilot-admin": "node scripts/pilot-admin.js",
+    "eval-safety": "node scripts/eval-safety.js",
     "vendor": "node scripts/vendor.js",
     "bundle:firebase": "esbuild scripts/firebase-entry.js --bundle --format=iife --global-name=firebaseBundle --minify --outfile=lib/firebase-bundle.js",
     "pretest": "node scripts/check-browsers.js && node scripts/check-server-deps.js",

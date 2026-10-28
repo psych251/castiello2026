@@ -5,12 +5,16 @@
  *
  *   experiments/<id>/participants/<docId>/private/session    assignment, scores, prompts, model
  *   experiments/<id>/participants/<docId>/chat/c<chat>-<seq>  every message, both sides, in order
- *   experiments/<id>/participants/<docId>/chat_events/<auto>  failed or empty model replies
+ *   experiments/<id>/participants/<docId>/chat_events/<auto>  failed, empty or flagged replies, stops (no text)
+ *   experiments/<id>/participants/<docId>/withheld/<auto>     the text of replies the safety check withheld
+ *   experiments/<id>/participants/<docId>/private/model_calls model calls and flags per reply (limits)
+ *   experiments/<id>/private_invites/<sha256 of code>         invite codes for invite-only studies
+ *   experiments/<id>/private_control/pause, chat_control/global   the pause switches
  *   experiments/<id>/private_sessions_per_uid/<uid>          how many sessions each browser started
  *   experiments/<id>/private_counters/sessions                how many sessions the study has started
  *
  * Another host (e.g. a Cloudflare Worker, which cannot run the Admin SDK) would implement these
- * same eight methods over Firestore's REST API.
+ * same methods over Firestore's REST API.
  */
 "use strict";
 
@@ -78,6 +82,75 @@ function createFirestoreStore(db, FieldValue) {
     },
     async logEvent(exp, pid, event) {
       await participant(exp, pid).collection("chat_events").add(event);
+    },
+    async saveWithheld(exp, pid, record) {
+      await participant(exp, pid).collection("withheld").add(record);
+    },
+    // Paused if the global switch or the study's own is on. Resolves { paused, scope, study_set }:
+    // study_set says whether the study's switch has ever been set (see default_paused).
+    async getPause(exp) {
+      const [g, e] = await Promise.all([
+        db.collection("chat_control").doc("global").get(),
+        db.collection("experiments").doc(exp).collection("private_control").doc("pause").get(),
+      ]);
+      const studySet = e.exists && typeof e.data().paused === "boolean";
+      if (g.exists && g.data().paused === true) return { paused: true, scope: "global", study_set: studySet };
+      if (e.exists && e.data().paused === true) return { paused: true, scope: "study", study_set: true };
+      return { paused: false, scope: null, study_set: studySet };
+    },
+    async getInvite(exp, hash) {
+      const s = await db.collection("experiments").doc(exp).collection("private_invites").doc(hash).get();
+      return s.exists ? s.data() : null;
+    },
+    // One use of an invite, if it has any left. Resolves { ok, label }.
+    claimInvite(exp, hash, uid, at) {
+      const ref = db.collection("experiments").doc(exp).collection("private_invites").doc(hash);
+      return db.runTransaction(async (tx) => {
+        const s = await tx.get(ref);
+        if (!s.exists) return { ok: false };
+        const d = s.data();
+        if (d.revoked || (d.uses || 0) >= (d.max_uses || 0)) return { ok: false };
+        tx.set(ref, { uses: (d.uses || 0) + 1, used: FieldValue.arrayUnion({ uid: uid, at: at }) }, { merge: true });
+        return { ok: true, label: d.label || null };
+      });
+    },
+    // Counts one model call for reply `key` against the limits. Resolves { ok, reason, flags }.
+    // lease { owner, until (ms) }: while another owner's lease on `key` is current, resolves
+    // { ok: false, reason: "in_progress" } and counts nothing.
+    reserveModelCall(exp, pid, key, limits, lease) {
+      const ref = participant(exp, pid).collection("private").doc("model_calls");
+      return db.runTransaction(async (tx) => {
+        const s = await tx.get(ref);
+        const d = s.exists ? s.data() : {};
+        const calls = (d.calls && d.calls[key]) || 0;
+        const total = d.total || 0;
+        const flags = (d.flags && d.flags[key]) || 0;
+        const held = d.leases && d.leases[key];
+        if (lease && held && held.owner !== lease.owner && held.until > Date.now()) return { ok: false, reason: "in_progress", flags };
+        if (calls >= limits.max_model_calls_per_reply) return { ok: false, reason: "per_reply", flags };
+        if (total >= limits.max_model_calls_per_session) return { ok: false, reason: "per_session", flags };
+        tx.set(ref, { calls: { [key]: calls + 1 }, total: total + 1, ...(lease ? { leases: { [key]: lease } } : {}) }, { merge: true });
+        return { ok: true, reason: null, flags };
+      });
+    },
+    // Gives up `owner`'s lease on reply `key`, if it still holds it.
+    releaseLease(exp, pid, key, owner) {
+      const ref = participant(exp, pid).collection("private").doc("model_calls");
+      return db.runTransaction(async (tx) => {
+        const s = await tx.get(ref);
+        const held = s.exists && s.data().leases && s.data().leases[key];
+        if (held && held.owner === owner) tx.set(ref, { leases: { [key]: FieldValue.delete() } }, { merge: true });
+      });
+    },
+    // One more flagged reply for `key`; resolves the new count.
+    noteFlag(exp, pid, key) {
+      const ref = participant(exp, pid).collection("private").doc("model_calls");
+      return db.runTransaction(async (tx) => {
+        const s = await tx.get(ref);
+        const n = ((s.exists && s.data().flags && s.data().flags[key]) || 0) + 1;
+        tx.set(ref, { flags: { [key]: n } }, { merge: true });
+        return n;
+      });
     },
   };
 }

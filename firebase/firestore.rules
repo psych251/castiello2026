@@ -64,6 +64,9 @@ service cloud.firestore {
       match /chat_events/{eventId} {
         allow read, write: if false;
       }
+      match /withheld/{recordId} {
+        allow read, write: if false;
+      }
     }
 
     // Client-side error reports. Append-only, tagged with the reporter's uid.

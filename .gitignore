@@ -57,6 +57,8 @@ identifiers.csv
 transcripts.csv
 # Free-text feedback answers (Pilot B feedback questions): may contain identifying details.
 feedback.csv
+# Bot replies withheld by the safety check (Pilot C on): may echo what participants typed.
+withheld_replies.csv
 
 # OS / editor
 .DS_Store

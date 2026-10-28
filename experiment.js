@@ -33,7 +33,9 @@ window.TEMPLATE_VERSION = "0.1.0";
 const EXPERIMENT = {
   // Firestore path: experiments/<id>/participants/... Change it for each phase so pilot and
   // real data never mix. Must match experiment_id in writeup/replication-report.qmd.
-  id: "castiello2026-pilot-b",
+  // Pilot C (2026-10-27): invited non-naive testers, revised prompt and safeguards. Pilot B was
+  // "castiello2026-pilot-b"; its records stay under that id and are never pooled with Pilot C.
+  id: "castiello2026-pilot-c",
 
   // Trials per Firestore write. 1 = save every trial the moment it finishes. This study has
   // only about ten trials, so 1 is well inside the free tier.
@@ -42,8 +44,15 @@ const EXPERIMENT = {
   // Also store the complete jsPsych dataset on the participant document at the end.
   save_full_data_at_end: true,
 
-  // Prolific: if set, participants are redirected to Prolific when they finish.
-  prolific_completion_code: "C15R004P",
+  // Prolific: if set, participants are redirected to Prolific when they finish. Pilot C testers
+  // are invited directly, not through Prolific.
+  prolific_completion_code: null,
+
+  // Only people with an invite link (?invite=<code>, made with scripts/pilot-admin.js) can take
+  // part. The page checks the code with the chat service before signing in or saving anything,
+  // and takes it out of the address bar so it is never stored; the service checks it again and
+  // counts its use when the chats are set up.
+  invite_only: true,
 
   // Contact shown in consent and debrief.
   contact_email: "stanfordpsych251@gmail.com",
@@ -75,8 +84,14 @@ const EXPERIMENT = {
   // before signing in, creating a participant record, consent or the questionnaire. Set false
   // (and lift `suspended` in server/config.js) to reopen. Only test runs in the local emulators
   // may skip it, with ?emulator=1&ignore_suspension=1.
-  suspended: true,
+  suspended: false,
 };
+
+// The study explanation from the debrief (section 8), word for word. Also shown, with the true
+// saving status, to anyone whose chats end early (a technical failure, leaving, a pause), so
+// everyone who reached the chats is debriefed.
+const DEBRIEF_ABOUT = "Thank you for your participation! This study investigates if people have different feelings of connection towards AI chatbots whose conversational styles remind them of their own characteristics or contrasting ones.";
+const DEBRIEF_DESIGN = "The two chat partners are AI chatbots prompted with personality scores calculated from your answers to the personality survey. Your answers were used to influence the chatbot's conversational styles, there's no new model training based on it. We did not mention which chatbot corresponded to which personality profile in advance so that it won't influence your impression ratings, which will help us examine if and how people respond differently to the two profiles. ";
 
 // True on anything with a mouse, trackpad, or stylus, including laptops with touchscreens.
 function hasFinePointer() {
@@ -86,24 +101,64 @@ function hasFinePointer() {
 // `?emulator=1` sends data to the local emulator instead of the real project (used by
 // `npm test`; start it yourself with `npm run emulators`).
 const URL_PARAMS = new URLSearchParams(window.location.search);
-const USE_EMULATOR = URL_PARAMS.get("emulator") === "1";
+// Only on this computer (npm run dev / npm test): on the published site ?emulator=1, and with it
+// ignore_suspension, chat_server, cc and forced assignments, are ignored.
+const ON_LOCALHOST = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+const USE_EMULATOR = ON_LOCALHOST && URL_PARAMS.get("emulator") === "1";
 const CHUNK_SIZE = Number(URL_PARAMS.get("chunk_size")) || EXPERIMENT.chunk_size;
 if (USE_EMULATOR && URL_PARAMS.get("cc")) EXPERIMENT.prolific_completion_code = URL_PARAMS.get("cc");
 const IGNORE_SUSPENSION = USE_EMULATOR && URL_PARAMS.get("ignore_suspension") === "1";
+// Test runs only: show the closed page as if EXPERIMENT.suspended were true.
+if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspended = true;
 
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 (async function main() {
-  // Before anything else: no sign-in, no record, no data.
-  if (EXPERIMENT.suspended && !IGNORE_SUSPENSION) {
+  const closedPage = (heading, text) => {
     document.body.innerHTML =
       '<div id="study-closed" class="jspsych-content" style="max-width:640px;margin:15vh auto;font:16px/1.6 system-ui,sans-serif;">' +
-      "<h2>Study temporarily closed</h2>" +
-      "<p>This study is not running at the moment. Nothing has been recorded. Please close this " +
-      "window" + (EXPERIMENT.prolific_completion_code ? " and return the study on Prolific" : "") + ".</p>" +
+      "<h2>" + heading + "</h2><p>" + text + "</p>" +
       "<p>Questions: <a href=\"mailto:" + EXPERIMENT.contact_email + "\">" + EXPERIMENT.contact_email + "</a></p></div>";
+  };
+  // Before anything else: no sign-in, no record, no data.
+  if (EXPERIMENT.suspended && !IGNORE_SUSPENSION) {
+    closedPage("Study temporarily closed", "This study is not running at the moment. Nothing has been recorded. Please close this " +
+      "window" + (EXPERIMENT.prolific_completion_code ? " and return the study on Prolific" : "") + ".");
     return;
+  }
+
+  // The chat service: the Cloud Function in the local emulators in test runs (`npm run dev` /
+  // `npm test`), otherwise EXPERIMENT.chat_endpoint.
+  const chatEndpoint = USE_EMULATOR
+    ? (URL_PARAMS.get("chat_server") || "http://127.0.0.1:5001/demo-psych251/us-central1/chat")
+    : EXPERIMENT.chat_endpoint;
+  const testHeaders = IGNORE_SUSPENSION ? { "X-Test-Ignore-Suspension": "1" } : {};
+
+  // Invite-only: check the link with the service before signing in, and keep the code out of
+  // every saved record (the saver records the address's parameters when it starts).
+  let invite = null;
+  if (EXPERIMENT.invite_only) {
+    invite = URL_PARAMS.get("invite");
+    if (invite) {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("invite");
+      window.history.replaceState(null, "", u.toString());
+    }
+    const access = invite
+      ? await new ChatClient({ endpoint: chatEndpoint, experiment_id: EXPERIMENT.id, headers: testHeaders, invite: invite }).access()
+      : { ok: false, code: "invite_required" };
+    if (!access.ok) {
+      if (access.code === "invite_required" || access.code === "invite_invalid") {
+        closedPage("This link cannot be used", "This study is open only to invited testers, and this link is not valid or has " +
+          "already been used. Nothing has been recorded.");
+      } else if (access.code === "network" || access.code === "pause_check_failed" || access.code === "not_configured") {
+        closedPage("Study unavailable", "The study cannot be reached right now. Nothing has been recorded. Please try again later.");
+      } else {
+        closedPage("Study temporarily closed", "This study is not running at the moment. Nothing has been recorded. Please close this window.");
+      }
+      return;
+    }
   }
 
   const C = window.Castiello;
@@ -118,14 +173,10 @@ const IGNORE_SUSPENSION = USE_EMULATOR && URL_PARAMS.get("ignore_suspension") ==
   });
   window.__saver = saver; // for debugging and the automated test
 
-  // The chat service: the Cloud Function in the local emulators in test runs (`npm run dev` /
-  // `npm test`), otherwise EXPERIMENT.chat_endpoint. Chats need both the service and a signed-in database connection;
-  // without either the participant is told straight after consent, before doing any work.
-  const chatEndpoint = USE_EMULATOR
-    ? (URL_PARAMS.get("chat_server") || "http://127.0.0.1:5001/demo-psych251/us-central1/chat")
-    : EXPERIMENT.chat_endpoint;
+  // Chats need both the service and a signed-in database connection; without either the
+  // participant is told straight after consent, before doing any work.
   const client = new ChatClient({ endpoint: chatEndpoint, saver: saver, experiment_id: EXPERIMENT.id,
-    headers: IGNORE_SUSPENSION ? { "X-Test-Ignore-Suspension": "1" } : {} });
+    headers: testHeaders, invite: invite });
   const chatMode = saver.mode === "offline" ? "unavailable: no database connection"
     : !chatEndpoint ? "unavailable: chat service not configured"
     : (await client.health()) ? "live" : "unavailable: chat service unreachable";
@@ -157,9 +208,15 @@ const IGNORE_SUSPENSION = USE_EMULATOR && URL_PARAMS.get("ignore_suspension") ==
       const unavailable = jsPsych.data.get().filter({ task: "chat_unavailable" }).count() > 0
         || jsPsych.data.get().filter({ task: "chat_setup", setup_ok: false }).count() > 0;
       const chatFailed = jsPsych.data.get().filter({ task: "chat", ended_reason: "failed" }).count() > 0;
+      const leftAfterStop = jsPsych.data.get().filter({ task: "chat", ended_reason: "withdrew_after_safety_stop" }).count() > 0;
+      const withdrew = leftAfterStop || jsPsych.data.get().filter({ task: "chat", ended_reason: "withdrew" }).count() > 0;
+      const paused = jsPsych.data.get().filter({ task: "chat", ended_reason: "paused" }).count() > 0;
       // A study that stopped early is saved as not completed, so it can never be counted as a
-      // finished session.
-      const endedEarly = !consented ? "declined_consent" : unavailable ? "chat_unavailable" : chatFailed ? "chat_failed" : null;
+      // finished session. A chat ended by the safety check is not an early end when the
+      // participant went on, so `completed` says only that the survey was finished, never that
+      // both chats ran in full: see chat1_ended_reason / chat2_ended_reason and safety_stop_any.
+      const endedEarly = !consented ? "declined_consent" : leftAfterStop ? "withdrew_after_safety_stop" : withdrew ? "withdrew" : paused ? "paused"
+        : unavailable ? "chat_unavailable" : chatFailed ? "chat_failed" : null;
       const result = await saver.finish(jsPsych, endedEarly ? { completed: false, ended_early: endedEarly } : {});
       const msg = document.getElementById("finish-message");
 
@@ -168,15 +225,31 @@ const IGNORE_SUSPENSION = USE_EMULATOR && URL_PARAMS.get("ignore_suspension") ==
           "You may close this window" + (EXPERIMENT.prolific_completion_code ? " and return the study on Prolific" : "") + ".</p>";
         return;
       }
+      // Chats that ended early: why, what was saved (true status), the debrief's explanation of
+      // the study, and the contact. No completion code: these sessions are not complete.
+      const earlyExit = (heading, why) => {
+        msg.innerHTML =
+          "<h2 class='thanks'>" + heading + "</h2>" +
+          "<p class='thanks'>" + why + "</p>" +
+          "<p class='thanks early-exit-saving'>" + (result.ok
+            ? "Your answers up to this point have been saved. Nothing after this point was recorded."
+            : "Some of your answers could not be saved because of a connection problem. Please use the download below.") + "</p>" +
+          "<h3 class='thanks'>About this study</h3>" +
+          "<p class='thanks'>" + DEBRIEF_ABOUT + "</p><p class='thanks'>" + DEBRIEF_DESIGN + "</p>" +
+          "<p class='thanks'>You may close this window. If you have questions or concerns, contact " +
+          "<a href=\"mailto:" + EXPERIMENT.contact_email + "\">" + EXPERIMENT.contact_email + "</a>.</p>";
+      };
+      if (leftAfterStop) return earlyExit("You have left the study", "You left after the chat was ended early by the study's automatic check.");
+      if (paused) return earlyExit("You have left the study", "The researchers have paused the study, so it ended early.");
+      if (withdrew) return earlyExit("You have left the study", "You chose to stop the study.");
       if (unavailable) {
         msg.innerHTML = "<h2 class='thanks'>Sorry</h2><p class='thanks'>The chat could not connect, so the " +
           "study cannot continue. You may close this window. Questions: " + EXPERIMENT.contact_email + "</p>";
         return;
       }
       if (chatFailed) {
-        msg.innerHTML = "<h2 class='thanks'>Sorry</h2><p class='thanks'>The chat stopped working, so the " +
-          "study cannot continue. You may close this window. Questions: " + EXPERIMENT.contact_email + "</p>";
-        return;
+        return earlyExit("The chat could not continue", "A technical problem stopped the chat, so the study has ended early. " +
+          "This was not caused by anything you did.");
       }
       if (result.ok && EXPERIMENT.prolific_completion_code && !USE_EMULATOR) {
         msg.innerHTML = "<p class='thanks'>Saved. Returning you to Prolific…</p>";
@@ -212,6 +285,7 @@ const IGNORE_SUSPENSION = USE_EMULATOR && URL_PARAMS.get("ignore_suspension") ==
   const chatApi = {
     startSession: (answers, force) => client.startSession(answers, force),
     turn: (chatIndex, seq, text) => client.turn(chatIndex, seq, text),
+    end: (chatIndex, reason) => client.end(chatIndex, reason),
   };
 
   // -------------------------------------------------------------------------
@@ -372,9 +446,19 @@ const IGNORE_SUSPENSION = USE_EMULATOR && URL_PARAMS.get("ignore_suspension") ==
         trial.max_chars = client.session.max_message_chars;
       },
       on_finish: (data) => {
-        if (data.ended_reason === "failed") {
-          saver.updateParticipant({ chat_status: "chat" + index + "_failed" });
+        // Exposure and safety status, kept on the participant record for good: chat_status is
+        // progress and later steps overwrite it. (The chat service's own record, private/session
+        // chat*_safety_stopped_at and chat*_completed_at, is the authoritative copy.)
+        const stoppedHere = ["safety_stop", "withdrew_after_safety_stop"].includes(data.ended_reason);
+        saver.updateParticipant(Object.assign({
+          ["chat" + index + "_ended_reason"]: data.ended_reason,
+          ["chat" + index + "_n_messages"]: data.n_messages,
+        }, stoppedHere ? { safety_stop_any: true } : {}));
+        if (["failed", "withdrew", "withdrew_after_safety_stop", "paused"].includes(data.ended_reason)) {
+          saver.updateParticipant({ chat_status: "chat" + index + "_" + data.ended_reason });
           jsPsych.abortExperiment();
+        } else if (data.ended_reason === "safety_stop") {
+          saver.updateParticipant({ chat_status: "chat" + index + "_safety_stop" });
         }
       },
     };
@@ -488,8 +572,8 @@ const IGNORE_SUSPENSION = USE_EMULATOR && URL_PARAMS.get("ignore_suspension") ==
     type: jsPsychHtmlButtonResponse,
     stimulus: `
       <h2>Debrief</h2>
-      <p>Thank you for your participation! This study investigates if people have different feelings of connection towards AI chatbots whose conversational styles remind them of their own characteristics or contrasting ones.</p>
-      <p>The two chat partners are AI chatbots prompted with personality scores calculated from your answers to the personality survey. Your answers were used to influence the chatbot's conversational styles, there's no new model training based on it. We did not mention which chatbot corresponded to which personality profile in advance so that it won't influence your impression ratings, which will help us examine if and how people respond differently to the two profiles. </p>
+      <p>${DEBRIEF_ABOUT}</p>
+      <p>${DEBRIEF_DESIGN}</p>
       <p>Your questionnaire answers, chat messages, and ratings were recorded for this research. Thank you for your time and contribution.</p>
       <p>If you have questions about this research, contact
       <a href="mailto:${EXPERIMENT.contact_email}">${EXPERIMENT.contact_email}</a>.

@@ -135,6 +135,7 @@ function memoryStore() {
     async getPause() { return { paused: false, study_set: true }; },
     async getInvite() { return null; },
     async claimInvite() { return { ok: false }; },
+    async claimProlificSession() { return true; },
     async reserveModelCall(e, p, key, limits, lease) {
       const c = calls.get(k(e, p)) || { calls: {}, flags: {}, total: 0, leases: {} };
       calls.set(k(e, p), c);
@@ -147,6 +148,7 @@ function memoryStore() {
       c.calls[key] = (c.calls[key] || 0) + 1; c.total += 1;
       return { ok: true, reason: null, flags };
     },
+    async replyDeadline(e, p, key, proposed, renew) { const c = calls.get(k(e, p)) || { calls: {}, flags: {}, total: 0, leases: {} }; calls.set(k(e, p), c); c.deadlines = c.deadlines || {}; if (c.deadlines[key] && !renew) return c.deadlines[key]; c.deadlines[key] = proposed; return proposed; },
     async releaseLease(e, p, key, owner) { const c = calls.get(k(e, p)); if (c && c.leases[key] && c.leases[key].owner === owner) delete c.leases[key]; },
     async noteFlag(e, p, key) { const c = calls.get(k(e, p)); c.flags[key] = (c.flags[key] || 0) + 1; return c.flags[key]; },
     totalCalls(e, p) { return (calls.get(k(e, p)) || { total: 0 }).total; },

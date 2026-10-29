@@ -16,7 +16,9 @@ const path = require("path");
 const Castiello = require("../server/castiello.js");
 
 const EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST;
-const EXP = "castiello2026-pilot-c";
+const EXP = "castiello2026-pilot-d";
+// EXP needs Prolific parameters; the emulated function accepts any study id while study_id is unset.
+const PROLIFIC = () => ({ pid: "svc" + Math.random().toString(36).slice(2, 12), study_id: "TESTSTUDY", session_id: "sess" + Math.random().toString(36).slice(2, 8) });
 const V1 = "castiello2026-exp3-supplement-v1";
 const V2 = "castiello2026-exp3-safety-v2";
 const V3 = "castiello2026-exp3-safety-v3";
@@ -75,7 +77,7 @@ function spyModel() {
 // overrides.profile sets EXP's prompt profile; overrides.realExperiments uses config.js as is.
 function makeService(overrides = {}) {
   const model = overrides.model || spyModel();
-  const loosened = Object.fromEntries(Object.entries(config.experiments).map(([k, v]) => [k, { ...v, open: true, invite_only: false, max_sessions: null, default_paused: false }]));
+  const loosened = Object.fromEntries(Object.entries(config.experiments).map(([k, v]) => [k, { ...v, open: true, invite_only: false, max_sessions: null, default_paused: false, prolific: undefined }]));
   if (overrides.profile) loosened[EXP].prompt_profile = overrides.profile;
   const extra = Object.fromEntries(Object.entries((overrides.config && overrides.config.experiments) || {})
     .map(([k, v]) => [k, { open: true, prompt_profile: V3, ...v }]));
@@ -85,6 +87,7 @@ function makeService(overrides = {}) {
     config: { ...config, ...(overrides.config || {}), experiments: overrides.realExperiments ? config.experiments : { ...loosened, ...extra } },
     verifyToken: async (t) => (t.startsWith("uid:") ? { uid: t.slice(4) } : null),
     allowForcedAssignment: true,
+    allowUnconfiguredProlific: overrides.allowUnconfiguredProlific !== false,
   });
   const call = (path, body, uid, extra = {}) => svc.handle({
     method: "POST", path, authorization: uid ? "Bearer uid:" + uid : undefined,
@@ -174,7 +177,7 @@ test.describe("chat service", () => {
     const want = Castiello.scoreBfi(answers).traits;
     expect(s).toMatchObject({ uid: who.uid, order: "inverse-first", mirror_name: "Alex", inverse_name: "Pat",
       chat1_name: "Pat", chat1_condition: "inverse", chat2_name: "Alex", chat2_condition: "mirror",
-      study_phase: "pilot-c", attention_check_passed: true, bfi_n_skipped: 2, model_provider: "fake",
+      study_phase: "pilot-d", attention_check_passed: true, bfi_n_skipped: 2, model_provider: "fake",
       prompt_version: V3, safety_version: SCREEN, model_safety_settings: config.prompt_profiles[V3].safety_settings,
       model_generation: { temperature: null, top_p: null, max_output_tokens: null, thinking_level: "LOW" },
       limits: config.limits, n_safety_flags: 0, chat1_safety_stopped_at: null });
@@ -433,10 +436,13 @@ test.describe("chat service", () => {
     // Lifted for the Pilot C walkthrough: Pilot A, Pilot B and Phase 2 stay closed, Pilot C is
     // invite-only and paused until resumed.
     expect(config.suspended).toBe(false);
-    for (const id of ["castiello2026-pilot-a", "castiello2026-pilot-b", "castiello2026-phase2"]) {
+    for (const id of ["castiello2026-pilot-a", "castiello2026-pilot-b", "castiello2026-pilot-c", "castiello2026-phase2"]) {
       expect(config.experiments[id]).toMatchObject({ open: false, max_sessions: 0 });
     }
-    expect(config.experiments[EXP]).toMatchObject({ open: true, invite_only: true, default_paused: true, prompt_profile: V3 });
+    // Pilot D: open, paused until resumed, Prolific access; refused when deployed until its study id
+    // and cap are set (launch blockers on purpose).
+    expect(config.experiments[EXP]).toMatchObject({ open: true, default_paused: true, prompt_profile: V3, max_sessions: 0,
+      prolific: { study_id: null, max_sessions_per_participant: 2 } });
 
     // The real function in the Functions emulator, as anyone could call it: closed studies refuse
     // new sessions and turns of existing ones, before any model call.
@@ -444,7 +450,7 @@ test.describe("chat service", () => {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ returnSecureToken: true }),
     });
     const { idToken, localId } = await r.json();
-    for (const id of ["castiello2026-pilot-a", "castiello2026-pilot-b", "castiello2026-phase2"]) {
+    for (const id of ["castiello2026-pilot-a", "castiello2026-pilot-b", "castiello2026-pilot-c", "castiello2026-phase2"]) {
       const pid = localId + "-" + rnd();
       for (const [p, body] of [["/access", {}], ["/session", { bfi: bfiAnswers() }], ["/turn", { chat_index: 1, seq: 0 }]]) {
         const res = await fetch(`${CHAT_SERVER}${p}`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + idToken },
@@ -641,45 +647,72 @@ test.describe("chat service", () => {
     for (const text of passes) expect(screenReply(text), text).toEqual({ flagged: false, rules: [], categories: [] });
   });
 
-  test("one deadline per message: the first attempt may use all of it; a call past it is cancelled and the page is told it took too long", async () => {
-    expect(config).toMatchObject({ reply_deadline_ms: 20000, attempt_timeout_ms: 20000, min_attempt_ms: 3000 });
-    // A model that never answers but records being cancelled (deadline scaled down to 1.5 s).
+  test("one deadline per message, kept by re-sends and renewed only by a manual retry; cancelled calls never answer later", async () => {
+    expect(config).toMatchObject({ reply_deadline_ms: 60000, attempt_timeout_ms: 45000, min_attempt_ms: 10000, retry_backoff_ms: 1000, model_timeout_ms: 45000 });
+    expect(config.hosting.timeout_seconds * 1000).toBeGreaterThan(config.reply_deadline_ms + 10000); // the platform outlasts the deadline
+    // A model that never answers but records being cancelled; times scaled down 40x.
     const aborted = [];
-    const slow = { provider: "fake", model_id: "fake-model-1", calls: [],
-      generate(req) { this.calls.push(1); return new Promise((resolve) => req.signal.addEventListener("abort", () => { aborted.push(Date.now()); resolve({ text: "late", finish_reason: "STOP" }); })); } };
-    const svc = makeService({ model: slow, config: { reply_deadline_ms: 1500, attempt_timeout_ms: 1500, min_attempt_ms: 400 } });
+    const hang = { provider: "fake", model_id: "fake-model-1", calls: [],
+      generate(req) { this.calls.push(Date.now()); return new Promise((resolve) => req.signal.addEventListener("abort", () => { aborted.push(Date.now()); resolve({ text: "late", finish_reason: "STOP" }); })); } };
+    const scaled = { reply_deadline_ms: 1500, attempt_timeout_ms: 1125, min_attempt_ms: 250, retry_backoff_ms: 25 };
+    const svc = makeService({ model: hang, config: scaled });
     const who = newParticipant();
+    const turn = (body) => svc.call("/turn", { participant_id: who.pid, chat_index: 1, seq: 0, ...body }, who.uid);
     await svc.call("/session", { participant_id: who.pid, bfi: bfiAnswers() }, who.uid);
-    const t0 = Date.now();
-    const r = await svc.call("/turn", { participant_id: who.pid, chat_index: 1, seq: 0 }, who.uid);
-    const took = Date.now() - t0;
-    expect(r).toMatchObject({ status: 503, body: { error: "reply_timeout", retryable: true } });
-    expect(slow.calls.length).toBe(1); // the first attempt had the whole deadline, so no second one
-    expect(aborted.length).toBe(1); // and it was cancelled, so it cannot answer later
-    expect(took).toBeLessThan(1500 + 1000); // the deadline, plus the database work
-    expect((await chatDocs(who.pid)).filter((d) => d.from === "bot")).toEqual([]); // nothing late was saved
-    const ev = await events(who.pid);
-    expect(ev.filter((e) => e.type === "model_failure").map((e) => e.code)).toEqual(["timeout"]);
-    expect(ev.filter((e) => e.type === "reply_deadline").length).toBe(1);
 
-    // A fast failure leaves time for a second attempt within the same deadline.
-    const svc2 = makeService({ config: { reply_deadline_ms: 1500, attempt_timeout_ms: 1500, min_attempt_ms: 400 } });
+    // The participant's send: attempt 1 (1125 ms) is cancelled, attempt 2 gets the 375 ms left, then the deadline.
+    let t0 = Date.now();
+    expect(await turn({})).toMatchObject({ status: 503, body: { error: "reply_timeout", retryable: true } });
+    expect(Date.now() - t0).toBeLessThan(1500 + 1000);
+    expect(hang.calls.length).toBe(2);
+    expect(aborted.length).toBe(2);
+    // An automatic re-send after that deadline: answered at once, with no new call.
+    t0 = Date.now();
+    expect(await turn({ retry: "auto" })).toMatchObject({ status: 503, body: { error: "reply_timeout" } });
+    expect(Date.now() - t0).toBeLessThan(700);
+    expect(hang.calls.length).toBe(2);
+    // The participant's "Try again": a new deadline (and the per-reply call limit, 4, is reached).
+    expect(await turn({ retry: "manual" })).toMatchObject({ status: 503, body: { error: "reply_timeout" } });
+    expect(hang.calls.length).toBe(4);
+    expect(await turn({ retry: "manual" })).toMatchObject({ status: 503, body: { error: "reply_unavailable", retryable: false } });
+    expect(hang.calls.length).toBe(4);
+    expect((await chatDocs(who.pid)).filter((d) => d.from === "bot")).toEqual([]); // no late answer was saved
+
+    // A re-send while the first request is still running joins it: one call, one reply, and it
+    // waits no longer than the first request's deadline.
+    const svc2 = makeService({ config: scaled });
     const who2 = newParticipant();
     await svc2.call("/session", { participant_id: who2.pid, bfi: bfiAnswers() }, who2.uid);
     await svc2.call("/turn", { participant_id: who2.pid, chat_index: 1, seq: 0 }, who2.uid);
-    const ok = await svc2.call("/turn", { participant_id: who2.pid, chat_index: 1, seq: 2, text: "[[fail:1]] synthetic" }, who2.uid);
-    expect(ok.status).toBe(200);
-    expect((await chatDocs(who2.pid)).find((d) => d.seq === 3).attempts).toBe(2);
+    const first = svc2.call("/turn", { participant_id: who2.pid, chat_index: 1, seq: 2, text: "[[slow:700]] synthetic" }, who2.uid);
+    await new Promise((r) => setTimeout(r, 150));
+    const before = svc2.model.calls.length;
+    const resend = await svc2.call("/turn", { participant_id: who2.pid, chat_index: 1, seq: 2, text: "[[slow:700]] synthetic", retry: "auto" }, who2.uid);
+    const orig = await first;
+    expect(orig.status).toBe(200);
+    expect(resend.body).toEqual(orig.body);
+    expect(svc2.model.calls.length - before).toBe(0); // the re-send made no call of its own
+    expect((await chatDocs(who2.pid)).map((d) => d.seq)).toEqual([0, 1, 2, 3]);
+
+    // A quick failure gets a short pause, then a second attempt within the same deadline.
+    const svc3 = makeService({ config: { ...scaled, retry_backoff_ms: 300 } });
+    const who3 = newParticipant();
+    await svc3.call("/session", { participant_id: who3.pid, bfi: bfiAnswers() }, who3.uid);
+    await svc3.call("/turn", { participant_id: who3.pid, chat_index: 1, seq: 0 }, who3.uid);
+    t0 = Date.now();
+    expect((await svc3.call("/turn", { participant_id: who3.pid, chat_index: 1, seq: 2, text: "[[fail:1]] synthetic" }, who3.uid)).status).toBe(200);
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(300);
+    expect((await chatDocs(who3.pid)).find((d) => d.seq === 3).attempts).toBe(2);
   });
 
-  test("with the real settings, replies arriving just after the old 9 s limit are shown, from one call, with nothing duplicated", async () => {
-    test.setTimeout(60000);
-    const svc = makeService(); // real config: 20 s deadline, first attempt may use all of it
+  test("with the real settings, replies arriving after the old 9 s and 20 s limits are shown, from one call, with nothing duplicated", async () => {
+    test.setTimeout(90000);
+    const svc = makeService(); // real config: 60 s per message, 45 s per call
     const who = newParticipant();
     const turn = (seq, text) => svc.call("/turn", { participant_id: who.pid, chat_index: 1, seq, text }, who.uid);
     await svc.call("/session", { participant_id: who.pid, bfi: bfiAnswers() }, who.uid);
     await turn(0);
-    for (const [seq, ms] of [[2, 9300], [4, 10500]]) {
+    for (const [seq, ms] of [[2, 9300], [4, 21000]]) {
       const before = svc.model.calls.length;
       const t0 = Date.now();
       const r = await turn(seq, `[[slow:${ms}]] synthetic`);
@@ -690,7 +723,28 @@ test.describe("chat service", () => {
     const docs = await chatDocs(who.pid);
     expect(docs.map((d) => d.seq)).toEqual([0, 1, 2, 3, 4, 5]);
     expect(docs.filter((d) => d.from === "bot").every((d) => d.attempts === 1)).toBe(true);
+    const calls = (await adminDb().doc(`experiments/${EXP}/participants/${who.pid}/private/model_calls`).get()).data().calls;
+    expect(calls).toEqual({ "c1-001": 1, "c1-003": 1, "c1-005": 1 });
     expect((await events(who.pid)).filter((e) => e.type === "model_failure")).toEqual([]);
+  });
+
+  test("/status says whether a message and its reply are saved, makes no model call, and only for the owner", async () => {
+    const svc = makeService();
+    const who = newParticipant();
+    const status = (seq, uid = who.uid) => svc.call("/status", { participant_id: who.pid, chat_index: 1, seq }, uid);
+    expect((await status(2)).body).toEqual({ received: false, reply_saved: false }); // no session yet
+    await svc.call("/session", { participant_id: who.pid, bfi: bfiAnswers() }, who.uid);
+    await svc.call("/turn", { participant_id: who.pid, chat_index: 1, seq: 0 }, who.uid);
+    expect((await status(2)).body).toEqual({ received: false, reply_saved: false });
+    const pending = svc.call("/turn", { participant_id: who.pid, chat_index: 1, seq: 2, text: "[[slow:600]] synthetic" }, who.uid);
+    await new Promise((r) => setTimeout(r, 250));
+    const calls = svc.model.calls.length;
+    expect((await status(2)).body).toEqual({ received: true, reply_saved: false }); // saved, reply still coming
+    expect(svc.model.calls.length).toBe(calls);
+    await pending;
+    expect((await status(2)).body).toEqual({ received: true, reply_saved: true });
+    expect((await status(2, newParticipant().uid)).body.error).toBe("not_your_session");
+    expect((await status(3)).body.error).toBe("bad_seq");
   });
 
   test("after the participant leaves, nothing more is generated, a late reply is never saved as shown, and later turns are refused", async () => {
@@ -818,6 +872,31 @@ test.describe("chat service", () => {
     expect((await start(newParticipant(), code2)).body.error).toBe("invite_invalid");
   });
 
+  test("Prolific access: the three parameters for the right study, at most two sessions per Prolific ID, only a hash stored", async () => {
+    const study = "prolific-test-" + rnd();
+    const svc = makeService({ config: { experiments: { [study]: { phase: "pilot-d", prolific: { study_id: "STUDY1", max_sessions_per_participant: 2 } } } } });
+    const pid = "PIDSYNTH" + rnd();
+    const good = { pid, study_id: "STUDY1", session_id: "SESS" + rnd() };
+    const access = (prolific) => svc.call("/access", { experiment_id: study, prolific }, null);
+    expect((await access(undefined)).body.error).toBe("prolific_required");
+    expect((await access({ ...good, study_id: "OTHER" })).body.error).toBe("prolific_required");
+    expect((await access({ ...good, pid: "bad id!" })).body.error).toBe("prolific_required");
+    expect(await access(good)).toEqual({ status: 200, body: { ok: true } });
+    const start = (prolific) => { const who = newParticipant(); return svc.call("/session", { experiment_id: study, participant_id: who.pid, bfi: bfiAnswers(), prolific }, who.uid).then((r) => ({ r, who })); };
+    expect((await start(undefined)).r.body.error).toBe("prolific_required");
+    const first = await start(good);
+    expect(first.r.status).toBe(200);
+    expect((await start(good)).r.status).toBe(200); // a reload in another browser
+    expect((await start(good)).r).toMatchObject({ status: 429, body: { error: "too_many_sessions" } });
+    const s = (await adminDb().doc(`experiments/${study}/participants/${first.who.pid}/private/session`).get()).data();
+    expect(s).toMatchObject({ prolific_study_id: "STUDY1", prolific_pid_hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
+    expect(JSON.stringify(s)).not.toContain(pid);
+    // Deployed, a Prolific study whose study id is not set refuses everyone.
+    const unset = "prolific-unset-" + rnd();
+    const deployed = makeService({ allowUnconfiguredProlific: false, config: { experiments: { [unset]: { phase: "pilot-d", prolific: { study_id: null } } } } });
+    expect((await deployed.call("/access", { experiment_id: unset, prolific: good }, null)).body.error).toBe("study_not_configured");
+  });
+
   test("a closed study refuses even sessions that already exist, before any model call", async () => {
     const study = "close-test-" + rnd();
     const open = makeService({ config: { experiments: { [study]: { phase: "pilot-c" } } } });
@@ -831,7 +910,7 @@ test.describe("chat service", () => {
     expect(closed.model.calls.length).toBe(0);
     // And the real Pilot B and Phase 2 settings are closed.
     const real = makeService({ realExperiments: true });
-    for (const id of ["castiello2026-pilot-b", "castiello2026-phase2"]) {
+    for (const id of ["castiello2026-pilot-b", "castiello2026-pilot-c", "castiello2026-phase2"]) {
       expect((await real.call("/access", { experiment_id: id }, null)).body.error).toBe("study_closed");
     }
   });
@@ -871,7 +950,7 @@ test.describe("chat service", () => {
     const b = await signUp();
     const post = (token, body) => fetch(`${CHAT_SERVER}/session`, {
       method: "POST", headers: { "Content-Type": "application/json", ...BYPASS, ...(token ? { Authorization: "Bearer " + token } : {}) },
-      body: JSON.stringify({ experiment_id: EXP, bfi: bfiAnswers(), invite: TEST_INVITE, ...body }),
+      body: JSON.stringify({ experiment_id: EXP, bfi: bfiAnswers(), prolific: PROLIFIC(), ...body }),
     });
     const pidA = a.uid + "-" + rnd();
     expect((await post(null, { participant_id: pidA })).status).toBe(401);

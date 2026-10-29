@@ -114,8 +114,12 @@ var jsPsychLiveChat = (function (jspsych) {
       // Live replies take several seconds (about 12 s for an opener and 6 s for a reply in the first
       // synthetic test), so the "still writing" note only appears after a longer wait.
       slow_after_ms: { type: jspsych.ParameterType.INT, default: 10000 },
-      // After this many failed tries at the same message, offer to leave the study.
-      failures_before_leave: { type: jspsych.ParameterType.INT, default: 3 },
+      // Receipt is checked again at this point if it was not confirmed at slow_after_ms.
+      very_slow_after_ms: { type: jspsych.ParameterType.INT, default: 30000 },
+      // A dropped connection is re-sent this many times automatically (same message, same deadline).
+      auto_resends: { type: jspsych.ParameterType.INT, default: 1 },
+      // After the service gives up on a reply, the participant may try this many more times.
+      manual_retries: { type: jspsych.ParameterType.INT, default: 1 },
     },
     data: {
       chat_index: { type: jspsych.ParameterType.INT },
@@ -126,6 +130,7 @@ var jsPsychLiveChat = (function (jspsych) {
       participant_chars: { type: jspsych.ParameterType.INT },
       n_failed_requests: { type: jspsych.ParameterType.INT },
       n_retries: { type: jspsych.ParameterType.INT },
+      n_auto_resends: { type: jspsych.ParameterType.INT },
       // "complete", "failed", "withdrew" (the participant chose to stop, with no intervention
       // before it), "safety_stop" (the service's safety check ended this chat and the participant
       // went on), "withdrew_after_safety_stop" (they left from that notice) or "paused" (the
@@ -153,11 +158,10 @@ var jsPsychLiveChat = (function (jspsych) {
       return new Promise((resolve) => {
         const started = new Date();
         const name = trial.bot_name;
-        const counts = { participant: 0, bot: 0, chars: 0, failed: 0, retries: 0 };
+        const counts = { participant: 0, bot: 0, chars: 0, failed: 0, retries: 0, auto_resends: 0 };
         let lastSeq = 0;       // the last message shown (the hidden opener request is 0)
         let busy = false;      // a request is in flight or waiting for "Try again"
         let finished = false;
-        let failuresHere = 0;  // consecutive failures for the current message
         let slowTimer = null;
 
         display_element.innerHTML = "";
@@ -228,6 +232,7 @@ var jsPsychLiveChat = (function (jspsych) {
             participant_chars: counts.chars,
             n_failed_requests: counts.failed,
             n_retries: counts.retries,
+            n_auto_resends: counts.auto_resends,
             ended_reason: reason,
             chat_started_at: started.toISOString(),
             chat_ended_at: ended.toISOString(),
@@ -292,20 +297,58 @@ var jsPsychLiveChat = (function (jspsych) {
           actions.appendChild(b);
         };
 
-        // Send one participant message (or the opener request) and show the reply. A failed
-        // request leaves the participant's message on screen and offers "Try again", which
-        // repeats exactly the same request; the service never answers the same message twice.
-        const request = (seq, text) => {
+        // Send one participant message (or the opener request) and show the reply.
+        //   Ordinary slow replies need nothing from the participant: the service keeps one call
+        //   running, within one deadline for the message (server/config.js), while the status line
+        //   says honestly that it is taking a while; "Stop and leave the study" stays available.
+        //   A dropped connection (no answer from the service at all) is re-sent once,
+        //   automatically, with the same message number: the service joins it to the request
+        //   already running and keeps that request's deadline, so it cannot cause a second call.
+        //   If the service says the reply could not be made within its deadline, the participant
+        //   may try once more ("Try again", a new deadline); after that, only the exit.
+        // mode: "first" (sent by the participant), "auto" (the automatic re-send), "manual".
+        let autoResendsHere = 0;
+        let manualRetriesHere = 0;
+        // The delayed-reply text is neutral, and says the message was received only when the
+        // service confirms it (a read-only /status check). "Stop and leave the study" stays
+        // available below the chat throughout, without being pressed on the participant here.
+        let receivedConfirmed = false;
+        const delayedText = (seq) => seq === 0
+          ? "The first message is taking longer than usual. Please don't refresh the page."
+          : receivedConfirmed
+            ? "The response is taking longer than usual. Your message has been received; please don't refresh the page."
+            : "The response is taking longer than usual. Please don't refresh the page.";
+        let sentAt = 0;
+        const request = (seq, text, mode) => {
+          mode = mode || "first";
           busy = true;
           setInputEnabled(false);
           actions.innerHTML = "";
-          setStatus(seq === 0 ? name + " is writing the first message" : name + " is writing a reply", true);
+          if (mode !== "auto") {
+            // The waiting clock runs from the participant's own send (or "Try again"), across any re-send.
+            sentAt = Date.now();
+            if (mode === "first") { autoResendsHere = 0; manualRetriesHere = 0; }
+            setStatus(seq === 0 ? name + " is writing the first message" : name + " is writing a reply", true);
+          }
           clearTimeout(slowTimer);
-          slowTimer = setTimeout(() => { setStatus(name + " is still writing. This is taking longer than usual.", true); }, trial.slow_after_ms);
-          trial.client.turn(trial.chat_index, seq, text).then((res) => {
+          if (mode === "first") receivedConfirmed = false;
+          // At each threshold (10 s, then 30 s if receipt was not yet confirmed): ask the service
+          // whether the message is saved, then show the neutral delayed-reply text.
+          const tick = () => {
+            const waited = Date.now() - sentAt;
+            if (waited >= trial.slow_after_ms) {
+              const show = () => { if (busy && !finished) setStatus(delayedText(seq), true); };
+              if (seq > 0 && !receivedConfirmed && trial.client.status) {
+                trial.client.status(trial.chat_index, seq).then((st) => { if (st && st.received) receivedConfirmed = true; show(); });
+              } else show();
+            }
+            const next = [trial.slow_after_ms, trial.very_slow_after_ms].map((x) => x - waited).filter((x) => x > 0);
+            if (next.length) slowTimer = setTimeout(tick, Math.min(...next) + 5);
+          };
+          tick();
+          trial.client.turn(trial.chat_index, seq, text, mode === "first" ? undefined : mode).then((res) => {
             clearTimeout(slowTimer);
             if (finished) return;
-            failuresHere = 0;
             busy = false;
             setStatus("", false);
             if (res.stopped) return safetyStop();
@@ -320,21 +363,24 @@ var jsPsychLiveChat = (function (jspsych) {
           }, (err) => {
             clearTimeout(slowTimer);
             if (finished) return;
+            const dropped = err && err.status === 0 && (err.code === "network" || err.code === "timeout");
+            if (dropped && autoResendsHere < trial.auto_resends) {
+              autoResendsHere += 1;
+              counts.auto_resends += 1;
+              return request(seq, text, "auto"); // silent: same message, same deadline, same status line
+            }
             counts.failed += 1;
-            failuresHere += 1;
             setStatus("", false);
             if (err && err.code === "study_paused") {
               status.textContent = "The researchers have paused the study, so this chat cannot continue. The answers you have given so far are saved.";
               actionButton("Leave the study", "chat-leave", () => finish("paused"));
-            } else if (err && err.retryable) {
-              status.textContent = err.code === "reply_timeout" ? name + "'s reply took too long." : name + "'s reply didn't arrive.";
-              actionButton("Try again", "chat-retry", () => { counts.retries += 1; request(seq, text); });
-              if (failuresHere >= trial.failures_before_leave) {
-                status.textContent = name + "'s reply didn't arrive. You can try again, or leave the study if this keeps happening.";
-                actionButton("Leave the study", "chat-leave", () => finish("failed"));
-              }
+            } else if (err && err.retryable && manualRetriesHere < trial.manual_retries) {
+              // Optional final recovery, after the service's own deadline and automatic handling.
+              status.textContent = name + "'s reply could not be generated. You can try once more, or leave the study.";
+              actionButton("Try again", "chat-retry", () => { counts.retries += 1; manualRetriesHere += 1; request(seq, text, "manual"); });
+              actionButton("Leave the study", "chat-leave", () => finish("failed"));
             } else {
-              status.textContent = "Something went wrong with this chat, so it cannot continue.";
+              status.textContent = "Sorry, " + name + "'s reply could not be generated, so this chat cannot continue.";
               actionButton("Leave the study", "chat-leave", () => finish("failed"));
             }
           });

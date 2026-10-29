@@ -56,6 +56,7 @@ function getService() {
     config: config,
     verifyToken: (token) => getAuth().verifyIdToken(token),
     allowForcedAssignment: IN_EMULATOR, // tests fix the order and names with ?order=&mirror_name=
+    allowUnconfiguredProlific: IN_EMULATOR, // tests run a Prolific study before its study_id is set
     log: (m) => logger.error("chat service: " + m),
   });
   return service;

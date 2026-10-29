@@ -16,6 +16,9 @@
  *   POST /session  { experiment_id, participant_id, bfi, invite?, force? }
  *        Scores the BFI, draws the order and names, builds both prompts and saves them
  *        privately. Returns only the two bot names in chat order.
+ *   POST /status   { experiment_id, participant_id, chat_index, seq }
+ *        Read only: whether the service has saved message `seq` and its reply, so the page can say
+ *        truthfully that a slow reply's message was received. No model call, nothing written.
  *   POST /end      { experiment_id, participant_id, chat_index, reason }
  *        The participant left (or the page ended the chats). No further model call is made for
  *        the session, a reply still being generated is not saved as shown, and later turns are
@@ -48,6 +51,7 @@ const Safety = require("./safety.js");
 
 // Invite codes are stored only as this hash, so the database never holds a usable code.
 const hashInvite = (code) => crypto.createHash("sha256").update(String(code)).digest("hex");
+const PROLIFIC_ID = /^[A-Za-z0-9]{1,64}$/;
 
 class ApiError extends Error {
   constructor(status, code, message, extra) {
@@ -73,6 +77,8 @@ function createStudyService(opts) {
   const now = opts.now || (() => new Date());
   const random = opts.random || Math.random;
   const allowForcedAssignment = !!opts.allowForcedAssignment;
+  // The emulators accept a Prolific study whose study_id is not set yet (tests); deployed, it is refused.
+  const allowUnconfiguredProlific = !!opts.allowUnconfiguredProlific;
   const log = opts.log || (() => {});
 
   const pick = (xs) => xs[Math.floor(random() * xs.length)];
@@ -84,12 +90,13 @@ function createStudyService(opts) {
       if (req.method === "GET" && req.path === "/health") return { status: 200, body: { ok: true } };
       const body = req.body && typeof req.body === "object" ? req.body : {};
       if (req.method === "POST" && req.path === "/access") return { status: 200, body: await checkAccess(body) };
-      if (req.method !== "POST" || !["/session", "/turn", "/end"].includes(req.path)) {
+      if (req.method !== "POST" || !["/session", "/turn", "/end", "/status"].includes(req.path)) {
         throw new ApiError(404, "not_found", "No such endpoint.");
       }
       const uid = await authenticate(req.authorization);
       const ids = checkIds(body, uid);
       if (req.path === "/end") return { status: 200, body: await endSession(uid, ids, body) };
+      if (req.path === "/status") return { status: 200, body: await messageStatus(uid, ids, body) };
       await checkNotPaused(ids.experimentId);
       const out = req.path === "/session" ? await startSession(uid, ids, body) : await takeTurn(uid, ids, body);
       return { status: 200, body: out };
@@ -146,9 +153,23 @@ function createStudyService(opts) {
 
   // ---- POST /access ------------------------------------------------------------
 
+  // A Prolific study: the three Prolific parameters, and the right study. Resolves the checked ids.
+  function checkProlific(experimentId, prolific) {
+    const p = config.experiments[experimentId].prolific;
+    if (!p) return null;
+    if (!p.study_id && !allowUnconfiguredProlific) throw new ApiError(403, "study_not_configured", "This study is not set up yet.");
+    const x = prolific && typeof prolific === "object" ? prolific : {};
+    const ok = ["pid", "study_id", "session_id"].every((k) => typeof x[k] === "string" && PROLIFIC_ID.test(x[k]));
+    if (!ok || (p.study_id && x.study_id !== p.study_id)) {
+      throw new ApiError(403, "prolific_required", "Please open this study from Prolific.");
+    }
+    return { pid: x.pid, study_id: x.study_id, session_id: x.session_id };
+  }
+
   async function checkAccess(body) {
     checkOpen(body.experiment_id);
     await checkNotPaused(body.experiment_id);
+    checkProlific(body.experiment_id, body.prolific);
     if (config.experiments[body.experiment_id].invite_only) {
       const code = typeof body.invite === "string" ? body.invite.trim() : "";
       const invite = code && code.length <= 200 ? await store.getInvite(body.experiment_id, hashInvite(code)) : null;
@@ -210,6 +231,12 @@ function createStudyService(opts) {
       if (!used || !used.ok) throw new ApiError(403, "invite_invalid", "This study link is not valid or has already been used.");
       inviteLabel = used.label || null;
     }
+    const prolific = checkProlific(experimentId, body.prolific);
+    if (prolific) {
+      const max = config.experiments[experimentId].prolific.max_sessions_per_participant || 1;
+      const ok = await store.claimProlificSession(experimentId, hashInvite("prolific:" + prolific.pid), max);
+      if (!ok) throw new ApiError(429, "too_many_sessions", "This Prolific account has already started the study too many times.");
+    }
     const claim = await store.claimSessionSlot(experimentId, uid, config.max_sessions_per_browser,
       config.experiments[experimentId].max_sessions ?? null);
     if (claim === "browser_limit") {
@@ -261,6 +288,10 @@ function createStudyService(opts) {
       model_safety_settings: profile.safety_settings || null,
       limits: config.limits,
       invite_label: inviteLabel,
+      // Only a hash of the Prolific ID (the page's own record keeps the raw ids, exported only to the
+      // gitignored identifiers.csv); the study and session ids say which Prolific study it came from.
+      prolific_pid_hash: prolific ? hashInvite("prolific:" + prolific.pid) : null,
+      prolific_study_id: prolific ? prolific.study_id : null,
       messages_per_chat: config.messages_per_chat,
       max_message_chars: config.max_message_chars,
       model_provider: model.provider,
@@ -277,6 +308,22 @@ function createStudyService(opts) {
       return publicView(await store.getSession(experimentId, participantId)); // lost a race with a retry
     }
     return publicView(session);
+  }
+
+  // ---- POST /status --------------------------------------------------------------
+
+  async function messageStatus(uid, { experimentId, participantId }, body) {
+    const session = await store.getSession(experimentId, participantId);
+    if (!session) return { received: false, reply_saved: false };
+    if (session.uid !== uid) throw new ApiError(403, "not_your_session", "This session does not belong to you.");
+    const chat = body.chat_index;
+    const seq = body.seq;
+    if ((chat !== 1 && chat !== 2) || !Number.isInteger(seq) || seq < 0 || seq % 2 !== 0) {
+      throw new ApiError(400, "bad_seq", "chat_index 1 or 2 and an even seq are needed.");
+    }
+    const mine = await store.getMessage(experimentId, participantId, chat, seq);
+    const reply = await store.getMessage(experimentId, participantId, chat, seq + 1);
+    return { received: !!mine, reply_saved: !!reply };
   }
 
   // ---- POST /end -----------------------------------------------------------------
@@ -361,7 +408,7 @@ function createStudyService(opts) {
     const already = await store.getMessage(experimentId, participantId, chat, replySeq);
     if (already) return { reply: { seq: replySeq, text: already.text }, done };
 
-    const reply = await generateReply(session, experimentId, participantId, chat, seq);
+    const reply = await generateReply(session, experimentId, participantId, chat, seq, body.retry === "manual");
     if (reply.ended) throw new ApiError(409, "session_ended", "This session has ended.");
     if (reply.already) {
       if (done) await store.updateSession(experimentId, participantId, { ["chat" + chat + "_completed_at"]: now().toISOString() });
@@ -387,12 +434,12 @@ function createStudyService(opts) {
   // request up to the participant's latest message (the full history, as in Experiment 3).
   // No participant id or anything derived from one goes in: retries are counted here.
   // Returns the reply to save, or { stopped: true, reason } when the safety check stops the chat.
-  async function generateReply(session, experimentId, participantId, chat, seq) {
+  async function generateReply(session, experimentId, participantId, chat, seq, manualRetry) {
     const key = "c" + chat + "-" + String(seq + 1).padStart(3, "0");
     const owner = Math.random().toString(36).slice(2) + Date.now().toString(36);
     let keepLease = false;
     try {
-      const out = await makeReply(session, experimentId, participantId, chat, seq, key, owner);
+      const out = await makeReply(session, experimentId, participantId, chat, seq, key, owner, manualRetry);
       keepLease = !!(out && out.kind === "reply"); // kept until it lapses: the reply is saved right after
       return out;
     } finally {
@@ -401,9 +448,16 @@ function createStudyService(opts) {
     }
   }
 
-  async function makeReply(session, experimentId, participantId, chat, seq, key, owner) {
+  async function makeReply(session, experimentId, participantId, chat, seq, key, owner, manualRetry) {
     const started = Date.now();
-    const deadline = started + (config.reply_deadline_ms || Infinity);
+    // The message's deadline: kept by every re-send, renewed only by the participant's "Try again".
+    const deadline = config.reply_deadline_ms
+      ? await store.replyDeadline(experimentId, participantId, key, started + config.reply_deadline_ms, !!manualRetry)
+      : Infinity;
+    if (Date.now() >= deadline) {
+      // A re-send after this message's deadline: no new call (only "Try again" starts a new one).
+      throw new ApiError(503, "reply_timeout", "The reply took too long. Please try again.");
+    }
     const history = (await store.listMessages(experimentId, participantId, chat)).filter((m) => m.seq <= seq);
     const request = {
       system: session["chat" + chat + "_prompt"],
@@ -430,7 +484,8 @@ function createStudyService(opts) {
       const left = deadline - Date.now();
       if (left < (config.min_attempt_ms || 0)) { timedOut = true; break; }
       const budget = await store.reserveModelCall(experimentId, participantId, key, limits, { owner, until: deadline });
-      if (!budget.ok && budget.reason === "in_progress") return waitForOther(experimentId, participantId, chat, seq + 1, deadline);
+      // Another request for this message is running: wait for its result, until its deadline.
+      if (!budget.ok && budget.reason === "in_progress") return waitForOther(experimentId, participantId, chat, seq + 1, Math.min(deadline, budget.until || deadline) + 2000);
       if (!budget.ok) {
         if (budget.flags > 0) return { stopped: true, reason: "budget_after_flag" };
         await event("call_limit", { reason: budget.reason });
@@ -446,6 +501,8 @@ function createStudyService(opts) {
         abort.abort(); // a call past its time is cancelled, so its answer can never arrive later
         if (e && e.code === "timeout") timedOut = true;
         await event("model_failure", { attempt, ms: Date.now() - t0, code: (e && e.code) || "error", message: String((e && e.message) || e).slice(0, 300) });
+        // A quick failure (e.g. the provider's 5xx or 429) gets a short pause before the next attempt.
+        if (!timedOut && config.retry_backoff_ms) await new Promise((r) => setTimeout(r, Math.min(config.retry_backoff_ms, Math.max(0, deadline - Date.now() - (config.min_attempt_ms || 0)))));
         continue;
       }
       const text = out && typeof out.text === "string" ? out.text.trim() : "";

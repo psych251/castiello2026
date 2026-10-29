@@ -33,9 +33,11 @@ window.TEMPLATE_VERSION = "0.1.0";
 const EXPERIMENT = {
   // Firestore path: experiments/<id>/participants/... Change it for each phase so pilot and
   // real data never mix. Must match experiment_id in writeup/replication-report.qmd.
-  // Pilot C (2026-10-27): invited non-naive testers, revised prompt and safeguards. Pilot B was
-  // "castiello2026-pilot-b"; its records stay under that id and are never pooled with Pilot C.
-  id: "castiello2026-pilot-c",
+  // Pilot D (2026-10-29): the second naive Prolific pilot, with Pilot C's revised prompt and
+  // safeguards. Earlier ids keep their records and are never pooled with it: Pilot B
+  // ("castiello2026-pilot-b", naive Prolific) and Pilot C ("castiello2026-pilot-c", the researcher
+  // and informed testers).
+  id: "castiello2026-pilot-d",
 
   // Trials per Firestore write. 1 = save every trial the moment it finishes. This study has
   // only about ten trials, so 1 is well inside the free tier.
@@ -44,15 +46,26 @@ const EXPERIMENT = {
   // Also store the complete jsPsych dataset on the participant document at the end.
   save_full_data_at_end: true,
 
-  // Prolific: if set, participants are redirected to Prolific when they finish. Pilot C testers
-  // are invited directly, not through Prolific.
+  // Prolific: participants who finish are redirected to Prolific with this completion code. SET
+  // BEFORE LAUNCH from the new Prolific study (not Pilot B's code). Until it is set, together with
+  // prolific.study_id, the published page does not open.
   prolific_completion_code: null,
 
-  // Only people with an invite link (?invite=<code>, made with scripts/pilot-admin.js) can take
-  // part. The page checks the code with the chat service before signing in or saving anything,
-  // and takes it out of the address bar so it is never stored; the service checks it again and
-  // counts its use when the chats are set up.
-  invite_only: true,
+  // Prolific access (Pilot D). The page needs Prolific's PROLIFIC_PID, STUDY_ID and SESSION_ID in
+  // its address, and STUDY_ID must be study_id, before it signs in or saves anything; the chat
+  // service checks them again. SET study_id BEFORE LAUNCH (also in server/config.js).
+  // early_exit_codes: a Prolific code shown when the study ends early, for each kind of early end,
+  // if the researcher has decided to give one (null: the screen asks the participant to message
+  // the researchers on Prolific instead). Kinds: technical_failure (the chat could not continue),
+  // left_after_safety_stop, withdrew, paused.
+  prolific: {
+    study_id: null,
+    early_exit_codes: { technical_failure: null, left_after_safety_stop: null, withdrew: null, paused: null },
+  },
+
+  // Invite links (Pilot C): only people with ?invite=<code> (scripts/pilot-admin.js) could take
+  // part. Off for Pilot D, which uses Prolific access instead.
+  invite_only: false,
 
   // Contact shown in consent and debrief.
   contact_email: "stanfordpsych251@gmail.com",
@@ -107,6 +120,10 @@ const ON_LOCALHOST = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
 const USE_EMULATOR = ON_LOCALHOST && URL_PARAMS.get("emulator") === "1";
 const CHUNK_SIZE = Number(URL_PARAMS.get("chunk_size")) || EXPERIMENT.chunk_size;
 if (USE_EMULATOR && URL_PARAMS.get("cc")) EXPERIMENT.prolific_completion_code = URL_PARAMS.get("cc");
+// Test runs only: an early-exit code for every kind of early end.
+if (USE_EMULATOR && URL_PARAMS.get("ecc") && EXPERIMENT.prolific) {
+  for (const k of Object.keys(EXPERIMENT.prolific.early_exit_codes)) EXPERIMENT.prolific.early_exit_codes[k] = URL_PARAMS.get("ecc");
+}
 const IGNORE_SUSPENSION = USE_EMULATOR && URL_PARAMS.get("ignore_suspension") === "1";
 // Test runs only: show the closed page as if EXPERIMENT.suspended were true.
 if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspended = true;
@@ -161,6 +178,32 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
     }
   }
 
+  // Prolific access: before signing in, the page needs the three Prolific parameters for the right
+  // study, and the service must agree. Published, it does not open until the study is configured.
+  let prolific = null;
+  if (EXPERIMENT.prolific) {
+    if (!USE_EMULATOR && (!EXPERIMENT.prolific.study_id || !EXPERIMENT.prolific_completion_code)) {
+      closedPage("Study not available", "This study is not open yet. Nothing has been recorded. Please close this window.");
+      return;
+    }
+    prolific = { pid: URL_PARAMS.get("PROLIFIC_PID"), study_id: URL_PARAMS.get("STUDY_ID"), session_id: URL_PARAMS.get("SESSION_ID") };
+    const wrongStudy = EXPERIMENT.prolific.study_id && prolific.study_id !== EXPERIMENT.prolific.study_id;
+    const access = !prolific.pid || !prolific.study_id || !prolific.session_id || wrongStudy
+      ? { ok: false, code: "prolific_required" }
+      : await new ChatClient({ endpoint: chatEndpoint, experiment_id: EXPERIMENT.id, headers: testHeaders, prolific: prolific }).access();
+    if (!access.ok) {
+      if (access.code === "prolific_required") {
+        closedPage("This link cannot be used", "Please open this study from Prolific, using the study's link. Nothing has been recorded.");
+      } else if (access.code === "network" || access.code === "pause_check_failed" || access.code === "not_configured") {
+        closedPage("Study unavailable", "The study cannot be reached right now. Nothing has been recorded. Please try again later.");
+      } else {
+        closedPage("Study temporarily closed", "This study is not running at the moment. Nothing has been recorded. Please close this window" +
+          " and return the study on Prolific.");
+      }
+      return;
+    }
+  }
+
   const C = window.Castiello;
   const deviceSupported = !EXPERIMENT.requires_keyboard || hasFinePointer();
 
@@ -176,7 +219,7 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
   // Chats need both the service and a signed-in database connection; without either the
   // participant is told straight after consent, before doing any work.
   const client = new ChatClient({ endpoint: chatEndpoint, saver: saver, experiment_id: EXPERIMENT.id,
-    headers: testHeaders, invite: invite });
+    headers: testHeaders, invite: invite, prolific: prolific });
   const chatMode = saver.mode === "offline" ? "unavailable: no database connection"
     : !chatEndpoint ? "unavailable: chat service not configured"
     : (await client.health()) ? "live" : "unavailable: chat service unreachable";
@@ -227,10 +270,19 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
       }
       // Chats that ended early: why, what was saved (true status), the debrief's explanation of
       // the study, and the contact. No completion code: these sessions are not complete.
-      const earlyExit = (heading, why) => {
+      // What a Prolific participant should do about the early end: the researcher's code for this
+      // kind of end, if one is set, or else a message to the researchers on Prolific.
+      const prolificNext = (kind) => {
+        if (!EXPERIMENT.prolific) return "";
+        const code = EXPERIMENT.prolific.early_exit_codes[kind];
+        return code
+          ? "<p class='thanks early-exit-prolific'>On Prolific, please enter this code: <strong>" + code + "</strong>.</p>"
+          : "<p class='thanks early-exit-prolific'>If you took part through Prolific, please send the researchers a message on Prolific so they can follow up.</p>";
+      };
+      const earlyExit = (heading, why, kind) => {
         msg.innerHTML =
           "<h2 class='thanks'>" + heading + "</h2>" +
-          "<p class='thanks'>" + why + "</p>" +
+          "<p class='thanks'>" + why + "</p>" + prolificNext(kind) +
           "<p class='thanks early-exit-saving'>" + (result.ok
             ? "Your answers up to this point have been saved. Nothing after this point was recorded."
             : "Some of your answers could not be saved because of a connection problem. Please use the download below.") + "</p>" +
@@ -239,17 +291,16 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
           "<p class='thanks'>You may close this window. If you have questions or concerns, contact " +
           "<a href=\"mailto:" + EXPERIMENT.contact_email + "\">" + EXPERIMENT.contact_email + "</a>.</p>";
       };
-      if (leftAfterStop) return earlyExit("You have left the study", "You left after the chat was ended early by the study's automatic check.");
-      if (paused) return earlyExit("You have left the study", "The researchers have paused the study, so it ended early.");
-      if (withdrew) return earlyExit("You have left the study", "You chose to stop the study.");
+      if (leftAfterStop) return earlyExit("You have left the study", "You left after the chat was ended early by the study's automatic check.", "left_after_safety_stop");
+      if (paused) return earlyExit("You have left the study", "The researchers have paused the study, so it ended early.", "paused");
+      if (withdrew) return earlyExit("You have left the study", "You chose to stop the study.", "withdrew");
       if (unavailable) {
-        msg.innerHTML = "<h2 class='thanks'>Sorry</h2><p class='thanks'>The chat could not connect, so the " +
-          "study cannot continue. You may close this window. Questions: " + EXPERIMENT.contact_email + "</p>";
-        return;
+        return earlyExit("The chat could not connect", "The chat could not connect, so the study cannot continue. " +
+          "This was not caused by anything you did.", "technical_failure");
       }
       if (chatFailed) {
         return earlyExit("The chat could not continue", "A technical problem stopped the chat, so the study has ended early. " +
-          "This was not caused by anything you did.");
+          "This was not caused by anything you did.", "technical_failure");
       }
       if (result.ok && EXPERIMENT.prolific_completion_code && !USE_EMULATOR) {
         msg.innerHTML = "<p class='thanks'>Saved. Returning you to Prolific…</p>";
@@ -284,8 +335,9 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
   // client itself holds the database connection, which cannot be copied.)
   const chatApi = {
     startSession: (answers, force) => client.startSession(answers, force),
-    turn: (chatIndex, seq, text) => client.turn(chatIndex, seq, text),
+    turn: (chatIndex, seq, text, retry) => client.turn(chatIndex, seq, text, retry),
     end: (chatIndex, reason) => client.end(chatIndex, reason),
+    status: (chatIndex, seq) => client.status(chatIndex, seq),
   };
 
   // -------------------------------------------------------------------------

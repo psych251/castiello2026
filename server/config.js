@@ -59,7 +59,16 @@ module.exports = {
     "castiello2026-pilot-b": { phase: "pilot-b", open: false, max_sessions: 0, prompt_profile: "castiello2026-exp3-supplement-v1" },
     // Pilot C: invited, non-naive testers only, with the revised prompt and safeguards
     // (2026-10-27). Separate from Pilot B; never pooled with it.
-    "castiello2026-pilot-c": { phase: "pilot-c", open: true, max_sessions: 12, invite_only: true, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v3" },
+    // Closed 2026-10-29 after its researcher (R01) and informed-tester (T01, T02) sessions; records kept.
+    "castiello2026-pilot-c": { phase: "pilot-c", open: false, max_sessions: 0, invite_only: true, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v3" },
+    // Pilot D: a second naive Prolific pilot (approved 2026-10-29), separate from Pilot C's researcher
+    // and tester sessions. Prolific access: a session needs Prolific's PROLIFIC_PID, STUDY_ID and
+    // SESSION_ID, STUDY_ID must equal prolific.study_id, and one Prolific ID may start at most
+    // prolific.max_sessions_per_participant sessions (a reload). BEFORE LAUNCH set prolific.study_id
+    // and max_sessions (e.g. twice the places); until then the deployed service refuses it, and it
+    // stays paused until a researcher resumes it.
+    "castiello2026-pilot-d": { phase: "pilot-d", open: true, max_sessions: 0, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v3",
+      prolific: { study_id: null, max_sessions_per_participant: 2 } },
     // Closed 2026-10-27 (was max_sessions: 200). Its prompt profile is to be decided.
     "castiello2026-phase2": { phase: "phase2", open: false, max_sessions: 0, prompt_profile: "castiello2026-exp3-safety-v3" },
   },
@@ -150,9 +159,19 @@ module.exports = {
   // and 4 messages needed "Try again" (no filter or provider block involved). Now the first attempt
   // may use the whole deadline; a second attempt runs only if the first fails or is withheld early,
   // and only within what is left of the same deadline.
-  reply_deadline_ms: 20000,
-  attempt_timeout_ms: 20000,
-  min_attempt_ms: 3000,
+  // 2026-10-28, after tester T01 (8 cancelled calls at 20 s, no other failure): a slow but working
+  // call is left to finish. The deadline belongs to the MESSAGE, not to a request: a re-send of the
+  // same message (the page's automatic re-send after a dropped connection) keeps it, and only the
+  // participant's own "Try again" starts a new one. Aligned limits, shortest first:
+  //   one model call 45 s (= model_timeout_ms, also the SDK's own timeout) < message 60 s
+  //   < the page's wait for the service 75 s (src/chat-client.js) < the platform's 120 s
+  //   (hosting.timeout_seconds), leaving time for the database and the network.
+  // A second attempt follows only a quick failure (after retry_backoff_ms) or a withheld reply,
+  // and only if at least min_attempt_ms of the message's deadline is left.
+  reply_deadline_ms: 60000,
+  attempt_timeout_ms: 45000,
+  min_attempt_ms: 10000,
+  retry_backoff_ms: 1000,
 
   // The deployed Cloud Function (index.js). allowed_origins are the pages that may call it from a
   // browser (the GitHub Pages site); the emulators accept localhost instead. max_instances caps

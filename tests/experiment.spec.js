@@ -18,7 +18,7 @@ const Castiello = require("../server/castiello.js");
 
 const EMULATOR = process.env.EMULATOR === "1" || !!process.env.FIRESTORE_EMULATOR_HOST;
 const PROJECT = "demo-psych251";
-const EXPERIMENT_ID = "castiello2026-pilot-c";
+const EXPERIMENT_ID = "castiello2026-pilot-d";
 // Pilot C is invite-only. The suite's own invite (made in beforeAll, emulator only) has plenty of uses.
 const TEST_INVITE = "test-invite-" + Math.random().toString(36).slice(2, 12);
 const sha256 = (x) => require("crypto").createHash("sha256").update(x).digest("hex");
@@ -80,7 +80,13 @@ const AFF = {
 
 // Every page load points at the test chat service, and skips the suspension (EXPERIMENT.suspended
 // and server/config.js `suspended`), which only test runs in the emulators may do.
-const url = (qs = "") => "/?emulator=1&ignore_suspension=1&invite=" + TEST_INVITE + "&chat_server=" + encodeURIComponent(CHAT_SERVER) + (qs ? "&" + qs : "");
+// Pilot D needs Prolific's three parameters; each page load gets a fresh Prolific ID unless the
+// test gives one (the service allows two sessions per Prolific ID).
+const prolificQs = () => "PROLIFIC_PID=p" + Math.random().toString(36).slice(2, 12) + "&STUDY_ID=TESTSTUDY&SESSION_ID=s" + Math.random().toString(36).slice(2, 8);
+const url = (qs = "") => {
+  const add = prolificQs().split("&").filter((kv) => !new RegExp("(^|&)" + kv.split("=")[0] + "=").test(qs)); // only what qs lacks
+  return "/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&" + add.join("&") + (qs ? "&" + qs : "");
+};
 
 async function setSurvey(page, values) {
   await page.waitForFunction((names) => window.__survey && names.every((n) => window.__survey.getQuestionByName(n)), Object.keys(values));
@@ -288,8 +294,10 @@ test.describe("experiment", () => {
     const s = await sessionOf(docId);
     expect(s).toMatchObject({ order: "mirror-first", mirror_name: "Pat", inverse_name: "Alex",
       chat1_name: "Pat", chat1_condition: "mirror", chat2_name: "Alex", chat2_condition: "inverse",
-      attention_check_passed: true, bfi_n_skipped: 2, study_phase: "pilot-c", model_provider: "fake", messages_per_chat: 24,
-      prompt_version: "castiello2026-exp3-safety-v3", safety_version: "castiello2026-screen-v2", invite_label: "TEST", n_safety_flags: 0 });
+      attention_check_passed: true, bfi_n_skipped: 2, study_phase: "pilot-d", model_provider: "fake", messages_per_chat: 24,
+      prompt_version: "castiello2026-exp3-safety-v3", safety_version: "castiello2026-screen-v2", invite_label: null, n_safety_flags: 0,
+      prolific_study_id: "s1", prolific_pid_hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
+    expect(JSON.stringify(s)).not.toContain("PROLIFICMARKER"); // the service keeps only a hash
     // The revised prompt: the paper's text (identity clause reworded), then the boundaries, the same for both bots.
     for (const k of ["chat1_prompt", "chat2_prompt"]) {
       expect(s[k].endsWith("\n\n" + Castiello.BOUNDARIES_V3)).toBe(true);
@@ -482,9 +490,10 @@ test.describe("experiment", () => {
     await page.locator("#jspsych-instructions-next").click();
     await page.getByRole("button", { name: "Start chat" }).click();
     await sendMessage(page, "[[fail:3]] hello there");
-    await expect(page.getByText(/reply didn't arrive/)).toBeVisible({ timeout: 30000 });
+    // Both automatic attempts failed: the optional final recovery is offered, with the exit beside it.
+    await expect(page.getByText("reply could not be generated. You can try once more, or leave the study.")).toBeVisible({ timeout: 30000 });
     await expect(page.locator(".chat-input")).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Leave the study", exact: true })).toHaveCount(0);
+    await expect(page.locator(".chat-actions").getByRole("button", { name: "Leave the study", exact: true })).toHaveCount(1);
     await page.getByRole("button", { name: "Try again" }).click();
     await expect(page.locator(".chat-bot")).toHaveCount(2);
     await expect(page.locator(".chat-participant")).toHaveCount(1);
@@ -505,11 +514,9 @@ test.describe("experiment", () => {
     await page.locator("#jspsych-instructions-next").click();
     await page.getByRole("button", { name: "Start chat" }).click();
     await sendMessage(page, "[[fail:99]] hello");
-    for (let i = 0; i < 2; i++) {
-      await page.getByRole("button", { name: "Try again" }).click();
-    }
-    // The call limit is reached (4 calls): the service says not to retry, and the page agrees.
-    await expect(page.getByText("Something went wrong with this chat, so it cannot continue.")).toBeVisible();
+    // One optional "Try again" after the automatic attempts; when that fails too, only the exit.
+    await page.getByRole("button", { name: "Try again" }).click();
+    await expect(page.getByText(/reply could not be generated, so this chat cannot continue\./)).toBeVisible({ timeout: 30000 });
     await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
     await page.getByRole("button", { name: "Leave the study", exact: true }).click();
     // The technical-failure exit: why, the true saving status, the debrief's explanation, the contact.
@@ -524,7 +531,7 @@ test.describe("experiment", () => {
     expect(p).toMatchObject({ completed: false, ended_early: "chat_failed", chat_status: "chat1_failed", chat1_ended_reason: "failed" });
     expect(await sessionOf(docId)).toMatchObject({ ended_reason: "failed", ended_in_chat: 1 }); // nothing more is generated
     const chatRow = (await trialsOf(docId)).find((t) => t.task === "chat");
-    expect(chatRow).toMatchObject({ ended_reason: "failed", n_failed_requests: 3, n_retries: 2, n_participant_messages: 1 });
+    expect(chatRow).toMatchObject({ ended_reason: "failed", n_failed_requests: 2, n_retries: 1, n_auto_resends: 0, n_participant_messages: 1 });
   });
 
   test("while a reply is being generated the page says so, outside the message log", async ({ page }) => {
@@ -587,11 +594,12 @@ test.describe("experiment", () => {
       await page.goto("http://not-localhost.test:8017/?emulator=1&ignore_suspension=1&invite=" + TEST_INVITE +
         "&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&order=mirror-first&cc=XYZ");
       await page.waitForTimeout(3000);
-      // Not emulator mode: no emulator banner, and nothing was sent to the emulators or the test chat service.
+      // Not emulator mode: no emulator banner, nothing sent to the emulators or the test chat service,
+      // and (Pilot D's Prolific study id and completion code not set yet) the page does not open.
       await expect(page.getByText("Emulator mode")).toHaveCount(0);
       expect(outside.filter((h) => /^(127\.0\.0\.1|localhost)(:|$)/.test(h))).toEqual([]);
-      // It went to the live chat service instead (aborted here), as a published page would.
-      expect(outside.some((h) => h.endsWith("cloudfunctions.net"))).toBe(true);
+      await expect(page.getByRole("heading", { name: "Study not available" })).toBeVisible();
+      expect(outside).toEqual([]);
     } finally {
       await b.close();
     }
@@ -610,35 +618,43 @@ test.describe("experiment", () => {
     expect(requests).toEqual([]); // nothing sent to Auth, Firestore or the chat service
   });
 
-  test("without a reachable chat service an invite-only study stops before sign-in, saving nothing", async ({ page }) => {
+  test("without a reachable chat service the Prolific study stops before sign-in, saving nothing", async ({ page }) => {
     const outside = [];
     page.on("request", (r) => { if (!r.url().startsWith("http://localhost:8017")) outside.push(new URL(r.url()).port + new URL(r.url()).pathname); });
-    await page.goto("/?emulator=1&ignore_suspension=1&invite=" + TEST_INVITE + "&chat_server=" + encodeURIComponent("http://127.0.0.1:9"));
+    await page.goto("/?emulator=1&ignore_suspension=1&" + prolificQs() + "&chat_server=" + encodeURIComponent("http://127.0.0.1:9"));
     await expect(page.getByRole("heading", { name: "Study unavailable" })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole("button", { name: "I agree to participate" })).toHaveCount(0);
     expect(await page.evaluate(() => window.__saver)).toBeUndefined();
     expect(outside).toEqual(["9/access"]); // nothing to Auth or Firestore
   });
 
-  test("invite-only: without a valid invite the page stops before sign-in, and the code never stays in the address", async ({ page }) => {
+  test("Prolific access: without the three Prolific parameters the page stops before sign-in", async ({ page }) => {
     const outside = [];
-    page.on("request", (r) => { if (!r.url().startsWith("http://localhost:8017")) outside.push(new URL(r.url()).pathname); });
-    for (const qs of ["", "&invite=not-a-real-invite"]) {
+    page.on("request", (rq) => { if (!rq.url().startsWith("http://localhost:8017")) outside.push(new URL(rq.url()).pathname); });
+    for (const qs of ["", "&PROLIFIC_PID=onlythis", "&PROLIFIC_PID=a1&STUDY_ID=s1"]) {
       outside.length = 0;
       await page.goto("/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + qs);
       await expect(page.getByRole("heading", { name: "This link cannot be used" })).toBeVisible();
-      await page.waitForTimeout(500);
+      await expect(page.getByText("Please open this study from Prolific")).toBeVisible();
+      await page.waitForTimeout(300);
       expect(await page.evaluate(() => window.__saver)).toBeUndefined();
-      expect(outside.every((x) => x.endsWith("/access"))).toBe(true); // no sign-in, no database
-      expect(page.url()).not.toContain("invite=");
+      expect(outside).toEqual([]); // not even the access check: nothing to Auth, Firestore or the service
     }
-    // A valid invite gets in, and the code is gone from the address before anything is saved.
+    // With them, the study starts.
     await page.goto(url());
     await page.waitForFunction(() => window.__saver && window.__saver.docId);
-    expect(page.url()).not.toContain(TEST_INVITE);
-    const docId = await page.evaluate(() => window.__saver.docId);
-    await page.evaluate(() => window.__saver._settle());
-    expect(JSON.stringify(await participantDoc(docId))).not.toContain(TEST_INVITE);
+  });
+
+  test("early exits tell Prolific participants what to do: the researcher's code if one is set, otherwise to message on Prolific", async ({ page }) => {
+    for (const [qs, want] of [["", /please send the researchers a message on Prolific/], ["ecc=EARLYCODE", /please enter this code: EARLYCODE/]]) {
+      await page.goto(url(qs));
+      await page.waitForFunction(() => window.__saver && window.__saver.docId);
+      await runThroughExperiment(page, { stopInChat: 1 });
+      await page.getByRole("button", { name: "Stop and leave the study" }).click();
+      await page.getByRole("button", { name: "Yes, leave the study" }).click();
+      await expect(page.locator(".early-exit-prolific")).toHaveText(want, { timeout: 15000 });
+      await expect(page.getByText("This study investigates if people have different feelings of connection")).toBeVisible();
+    }
   });
 
   test("a participant can stop during a chat; what they answered stays saved and the study ends as withdrawn", async ({ page }) => {
@@ -729,6 +745,67 @@ test.describe("experiment", () => {
       safety_stop_any: true, chat1_ended_reason: "withdrew_after_safety_stop" });
   });
 
+  test("an ordinary slow reply (40 s) needs nothing from the participant: neutral waiting text, Stop available, no Try again", async ({ page }) => {
+    test.setTimeout(90000);
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await runThroughExperiment(page, { stopInChat: 1 });
+    await sendMessage(page, "[[slow:40000]] synthetic");
+    await expect(page.locator(".chat-status")).toHaveText(/is writing a reply/);
+    // After 10 s: the neutral text, saying "received" because the service confirmed it.
+    await expect(page.locator(".chat-status")).toHaveText("The response is taking longer than usual. Your message has been received; please don't refresh the page.", { timeout: 13000 });
+    await page.waitForTimeout(21000); // past 30 s: the same neutral text, with no invitation to leave
+    await expect(page.locator(".chat-status")).toHaveText("The response is taking longer than usual. Your message has been received; please don't refresh the page.");
+    await expect(page.locator(".chat-status")).not.toContainText(/leave/i);
+    await expect(page.getByRole("button", { name: "Stop and leave the study" })).toBeEnabled(); // still there, below the chat
+    await expect(page.locator('.chat-msg[data-from="bot"]')).toHaveCount(2, { timeout: 15000 });
+    await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+    const calls = (await fsGet(`experiments/${EXPERIMENT_ID}/participants/${docId}/private/model_calls`)).body.fields.calls.mapValue.fields;
+    expect(calls["c1-003"].integerValue).toBe("1"); // one call for the 40 s reply
+  });
+
+  test("the delayed-reply text says 'received' only when the service confirms it", async ({ page }) => {
+    test.setTimeout(60000);
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    await runThroughExperiment(page, { stopInChat: 1 });
+    // The receipt check cannot confirm (stood in for here): the text leaves "received" out.
+    await page.route(CHAT_SERVER + "/status", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ received: false, reply_saved: false }) }));
+    await sendMessage(page, "[[slow:12500]] synthetic");
+    await expect(page.locator(".chat-status")).toHaveText("The response is taking longer than usual. Please don't refresh the page.", { timeout: 13000 });
+    await expect(page.locator('.chat-msg[data-from="bot"]')).toHaveCount(2, { timeout: 10000 });
+  });
+
+  test("a dropped connection is re-sent once automatically, joins the call already running, and shows one reply", async ({ page }) => {
+    test.setTimeout(60000);
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await runThroughExperiment(page, { stopInChat: 1 });
+    // The first request reaches the service, but its answer is lost on the way back.
+    let dropped = false;
+    const bodies = [];
+    await page.route(CHAT_SERVER + "/turn", async (route) => {
+      bodies.push(JSON.parse(route.request().postData()));
+      if (!dropped) {
+        dropped = true;
+        route.fetch().catch(() => {}); // the service keeps working on it
+        await new Promise((r) => setTimeout(r, 600));
+        return route.abort("connectionreset");
+      }
+      return route.continue();
+    });
+    await sendMessage(page, "[[slow:3000]] synthetic");
+    await expect(page.locator('.chat-msg[data-from="bot"]')).toHaveCount(2, { timeout: 20000 });
+    await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+    expect(bodies.map((b) => [b.seq, b.text, b.retry || null])).toEqual([[2, "[[slow:3000]] synthetic", null], [2, "[[slow:3000]] synthetic", "auto"]]);
+    await page.unroute(CHAT_SERVER + "/turn");
+    expect((await chatOf(docId)).map((m) => m.seq)).toEqual([0, 1, 2, 3]); // one reply, nothing duplicated
+    const calls = (await fsGet(`experiments/${EXPERIMENT_ID}/participants/${docId}/private/model_calls`)).body.fields.calls.mapValue.fields;
+    expect(calls["c1-003"].integerValue).toBe("1"); // the re-send made no second call
+  });
+
   test("a reply arriving after 10 s is shown without Try again, after an honest waiting note", async ({ page }) => {
     test.setTimeout(60000);
     await page.goto(url());
@@ -736,7 +813,7 @@ test.describe("experiment", () => {
     const docId = await page.evaluate(() => window.__saver.docId);
     await runThroughExperiment(page, { stopInChat: 1 });
     await sendMessage(page, "[[slow:10500]] synthetic");
-    await expect(page.getByText("is still writing. This is taking longer than usual.")).toBeVisible({ timeout: 12000 });
+    await expect(page.getByText("The response is taking longer than usual.")).toBeVisible({ timeout: 13000 });
     await expect(page.locator('.chat-msg[data-from="bot"]')).toHaveCount(2, { timeout: 15000 });
     await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
     expect((await chatOf(docId)).map((m) => m.seq)).toEqual([0, 1, 2, 3]);
@@ -783,7 +860,7 @@ test.describe("experiment", () => {
     await page.route(CHAT_SERVER + "/turn", (route) => route.fulfill({ status: 503, contentType: "application/json",
       body: JSON.stringify({ error: "reply_timeout", message: "The reply took too long. Please try again.", retryable: true }) }));
     await sendMessage(page, "hello");
-    await expect(page.getByText(/reply took too long/)).toBeVisible();
+    await expect(page.getByText(/reply could not be generated\. You can try once more/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
     await page.unroute(CHAT_SERVER + "/turn");
     await page.getByRole("button", { name: "Try again" }).click();

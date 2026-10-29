@@ -25,12 +25,14 @@
       this.experimentId = opts.experiment_id;
       this.headers = opts.headers || {}; // test runs only: lets the local emulator skip the suspension
       this.invite = opts.invite || null; // invite-only studies: sent with /access and /session
-      // Longer than the service's own deadline for a reply (20 s for all attempts, server/config.js
-      // reply_deadline_ms) plus its database work, so the page normally hears the server's answer
-      // (a reply, or "took too long") rather than giving up first. If it does give up first, "Try
-      // again" repeats the same message: the service never answers one message twice, a repeated
-      // request waits for the one already making the reply, and the call limits bound the calls.
-      this.timeoutMs = opts.timeout_ms || 30000;
+      this.prolific = opts.prolific || null; // Prolific studies: { pid, study_id, session_id }, same
+      // Longer than the service's own deadline for a reply (60 s for all attempts, server/config.js
+      // reply_deadline_ms) plus its database work, and shorter than the platform's 120 s, so the
+      // page normally hears the service's answer rather than giving up first. If it does give up
+      // first, the re-send repeats the same message: the service never answers one message twice,
+      // a repeated request waits for the one already making the reply (keeping its deadline),
+      // and the call limits bound the calls.
+      this.timeoutMs = opts.timeout_ms || 75000;
       this.session = null; // { chats: [{ chat_index, bot_name }], messages_per_chat, max_message_chars }
     }
 
@@ -55,7 +57,7 @@
         const r = await fetch(this.endpoint + "/access", {
           method: "POST",
           headers: Object.assign({ "Content-Type": "application/json" }, this.headers),
-          body: JSON.stringify({ experiment_id: this.experimentId, invite: this.invite || undefined }),
+          body: JSON.stringify({ experiment_id: this.experimentId, invite: this.invite || undefined, prolific: this.prolific || undefined }),
           signal: AbortSignal.timeout(10000),
         });
         let json = {};
@@ -68,7 +70,7 @@
 
     /** Send the BFI answers; the service scores them and assigns the bots. */
     async startSession(bfiAnswers, force) {
-      this.session = await this._post("/session", { bfi: bfiAnswers, invite: this.invite || undefined, force: force || undefined });
+      this.session = await this._post("/session", { bfi: bfiAnswers, invite: this.invite || undefined, prolific: this.prolific || undefined, force: force || undefined });
       return this.session;
     }
 
@@ -80,9 +82,19 @@
       return this._post("/end", { chat_index: chatIndex, reason: reason }, { keepalive: true }).catch(() => null);
     }
 
+    /**
+     * Read only: has the service saved message `seq` (and its reply)? Resolves
+     * { received, reply_saved }, or null if it cannot tell within a few seconds.
+     */
+    status(chatIndex, seq) {
+      return this._post("/status", { chat_index: chatIndex, seq: seq }, { timeoutMs: 5000 }).catch(() => null);
+    }
+
     /** One participant message (seq 0 = ask for the opener). Resolves { reply: { seq, text } | null, done }. */
-    turn(chatIndex, seq, text) {
-      return this._post("/turn", { chat_index: chatIndex, seq: seq, text: text });
+    // retry: undefined (the participant's own send), "auto" (the page's re-send after a dropped
+    // connection: keeps the message's deadline) or "manual" ("Try again": a new deadline).
+    turn(chatIndex, seq, text, retry) {
+      return this._post("/turn", { chat_index: chatIndex, seq: seq, text: text, retry: retry || undefined });
     }
 
     async _post(path, body, extra) {
@@ -98,7 +110,7 @@
           method: "POST",
           headers: Object.assign({ "Content-Type": "application/json", Authorization: "Bearer " + token }, this.headers),
           body: JSON.stringify(Object.assign({ experiment_id: this.experimentId, participant_id: this.saver.docId }, body)),
-          signal: AbortSignal.timeout(this.timeoutMs),
+          signal: AbortSignal.timeout((extra && extra.timeoutMs) || this.timeoutMs),
           keepalive: !!(extra && extra.keepalive),
         });
       } catch (e) {

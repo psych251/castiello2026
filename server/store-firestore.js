@@ -126,11 +126,34 @@ function createFirestoreStore(db, FieldValue) {
         const total = d.total || 0;
         const flags = (d.flags && d.flags[key]) || 0;
         const held = d.leases && d.leases[key];
-        if (lease && held && held.owner !== lease.owner && held.until > Date.now()) return { ok: false, reason: "in_progress", flags };
+        if (lease && held && held.owner !== lease.owner && held.until > Date.now()) return { ok: false, reason: "in_progress", flags, until: held.until };
         if (calls >= limits.max_model_calls_per_reply) return { ok: false, reason: "per_reply", flags };
         if (total >= limits.max_model_calls_per_session) return { ok: false, reason: "per_session", flags };
         tx.set(ref, { calls: { [key]: calls + 1 }, total: total + 1, ...(lease ? { leases: { [key]: lease } } : {}) }, { merge: true });
         return { ok: true, reason: null, flags };
+      });
+    },
+    // The deadline of reply `key`: set by its first request (or anew by a manual retry), and
+    // returned unchanged to every later request for it. Resolves the deadline (ms).
+    replyDeadline(exp, pid, key, proposed, renew) {
+      const ref = participant(exp, pid).collection("private").doc("model_calls");
+      return db.runTransaction(async (tx) => {
+        const s = await tx.get(ref);
+        const held = s.exists && s.data().deadlines && s.data().deadlines[key];
+        if (held && !renew) return held;
+        tx.set(ref, { deadlines: { [key]: proposed } }, { merge: true });
+        return proposed;
+      });
+    },
+    // One more session for a Prolific ID (by hash), if it has fewer than `max`. Resolves true/false.
+    claimProlificSession(exp, hash, max) {
+      const ref = db.collection("experiments").doc(exp).collection("private_prolific").doc(hash);
+      return db.runTransaction(async (tx) => {
+        const s = await tx.get(ref);
+        const n = s.exists ? s.data().n || 0 : 0;
+        if (n >= max) return false;
+        tx.set(ref, { n: n + 1 }, { merge: true });
+        return true;
       });
     },
     // Gives up `owner`'s lease on reply `key`, if it still holds it.

@@ -67,8 +67,9 @@ module.exports = {
     // prolific.max_sessions_per_participant sessions (a reload). BEFORE LAUNCH set prolific.study_id
     // and max_sessions (e.g. twice the places); until then the deployed service refuses it, and it
     // stays paused until a researcher resumes it.
-    "castiello2026-pilot-d": { phase: "pilot-d", open: true, max_sessions: 0, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v3",
-      prolific: { study_id: null, max_sessions_per_participant: 2 } },
+    // Prolific draft "Pilot D" (duplicated from Pilot B, 2026-10-29): 10 places, so a cap of 20.
+    "castiello2026-pilot-d": { phase: "pilot-d", open: true, max_sessions: 20, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v3",
+      prolific: { study_id: "6ae2c1c891a6603199aad8fc", max_sessions_per_participant: 2 } },
     // Closed 2026-10-27 (was max_sessions: 200). Its prompt profile is to be decided.
     "castiello2026-phase2": { phase: "phase2", open: false, max_sessions: 0, prompt_profile: "castiello2026-exp3-safety-v3" },
   },

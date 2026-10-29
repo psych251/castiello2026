@@ -18,7 +18,7 @@ const Castiello = require("../server/castiello.js");
 const EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST;
 const EXP = "castiello2026-pilot-d";
 // EXP needs Prolific parameters; the emulated function accepts any study id while study_id is unset.
-const PROLIFIC = () => ({ pid: "svc" + Math.random().toString(36).slice(2, 12), study_id: "TESTSTUDY", session_id: "sess" + Math.random().toString(36).slice(2, 8) });
+const PROLIFIC = () => ({ pid: "svc" + Math.random().toString(36).slice(2, 12), study_id: "6ae2c1c891a6603199aad8fc", session_id: "sess" + Math.random().toString(36).slice(2, 8) });
 const V1 = "castiello2026-exp3-supplement-v1";
 const V2 = "castiello2026-exp3-safety-v2";
 const V3 = "castiello2026-exp3-safety-v3";
@@ -439,10 +439,9 @@ test.describe("chat service", () => {
     for (const id of ["castiello2026-pilot-a", "castiello2026-pilot-b", "castiello2026-pilot-c", "castiello2026-phase2"]) {
       expect(config.experiments[id]).toMatchObject({ open: false, max_sessions: 0 });
     }
-    // Pilot D: open, paused until resumed, Prolific access; refused when deployed until its study id
-    // and cap are set (launch blockers on purpose).
-    expect(config.experiments[EXP]).toMatchObject({ open: true, default_paused: true, prompt_profile: V3, max_sessions: 0,
-      prolific: { study_id: null, max_sessions_per_participant: 2 } });
+    // Pilot D: open, paused until resumed, Prolific access for the Pilot D draft only, 20 sessions.
+    expect(config.experiments[EXP]).toMatchObject({ open: true, default_paused: true, prompt_profile: V3, max_sessions: 20,
+      prolific: { study_id: "6ae2c1c891a6603199aad8fc", max_sessions_per_participant: 2 } });
 
     // The real function in the Functions emulator, as anyone could call it: closed studies refuse
     // new sessions and turns of existing ones, before any model call.

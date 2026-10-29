@@ -82,7 +82,7 @@ const AFF = {
 // and server/config.js `suspended`), which only test runs in the emulators may do.
 // Pilot D needs Prolific's three parameters; each page load gets a fresh Prolific ID unless the
 // test gives one (the service allows two sessions per Prolific ID).
-const prolificQs = () => "PROLIFIC_PID=p" + Math.random().toString(36).slice(2, 12) + "&STUDY_ID=TESTSTUDY&SESSION_ID=s" + Math.random().toString(36).slice(2, 8);
+const prolificQs = () => "PROLIFIC_PID=p" + Math.random().toString(36).slice(2, 12) + "&STUDY_ID=6ae2c1c891a6603199aad8fc&SESSION_ID=s" + Math.random().toString(36).slice(2, 8);
 const url = (qs = "") => {
   const add = prolificQs().split("&").filter((kv) => !new RegExp("(^|&)" + kv.split("=")[0] + "=").test(qs)); // only what qs lacks
   return "/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&" + add.join("&") + (qs ? "&" + qs : "");
@@ -253,7 +253,7 @@ test.describe("experiment", () => {
       }
     });
 
-    await page.goto(url("PROLIFIC_PID=PROLIFICMARKER&STUDY_ID=s1&SESSION_ID=sess1&order=mirror-first&mirror_name=Pat"));
+    await page.goto(url("PROLIFIC_PID=PROLIFICMARKER&SESSION_ID=sess1&order=mirror-first&mirror_name=Pat"));
     await page.waitForFunction(() => window.__saver && window.__saver.docId);
     expect(await page.evaluate(() => window.__saver.mode)).toBe("emulator");
     const docId = await page.evaluate(() => window.__saver.docId);
@@ -296,7 +296,7 @@ test.describe("experiment", () => {
       chat1_name: "Pat", chat1_condition: "mirror", chat2_name: "Alex", chat2_condition: "inverse",
       attention_check_passed: true, bfi_n_skipped: 2, study_phase: "pilot-d", model_provider: "fake", messages_per_chat: 24,
       prompt_version: "castiello2026-exp3-safety-v3", safety_version: "castiello2026-screen-v2", invite_label: null, n_safety_flags: 0,
-      prolific_study_id: "s1", prolific_pid_hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
+      prolific_study_id: "6ae2c1c891a6603199aad8fc", prolific_pid_hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
     expect(JSON.stringify(s)).not.toContain("PROLIFICMARKER"); // the service keeps only a hash
     // The revised prompt: the paper's text (identity clause reworded), then the boundaries, the same for both bots.
     for (const k of ["chat1_prompt", "chat2_prompt"]) {
@@ -595,10 +595,10 @@ test.describe("experiment", () => {
         "&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&order=mirror-first&cc=XYZ");
       await page.waitForTimeout(3000);
       // Not emulator mode: no emulator banner, nothing sent to the emulators or the test chat service,
-      // and (Pilot D's Prolific study id and completion code not set yet) the page does not open.
+      // and without Prolific's parameters the page stops before any request.
       await expect(page.getByText("Emulator mode")).toHaveCount(0);
       expect(outside.filter((h) => /^(127\.0\.0\.1|localhost)(:|$)/.test(h))).toEqual([]);
-      await expect(page.getByRole("heading", { name: "Study not available" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "This link cannot be used" })).toBeVisible();
       expect(outside).toEqual([]);
     } finally {
       await b.close();
@@ -631,7 +631,8 @@ test.describe("experiment", () => {
   test("Prolific access: without the three Prolific parameters the page stops before sign-in", async ({ page }) => {
     const outside = [];
     page.on("request", (rq) => { if (!rq.url().startsWith("http://localhost:8017")) outside.push(new URL(rq.url()).pathname); });
-    for (const qs of ["", "&PROLIFIC_PID=onlythis", "&PROLIFIC_PID=a1&STUDY_ID=s1"]) {
+    // Missing parameters, or another Prolific study's id (e.g. Pilot B's link).
+    for (const qs of ["", "&PROLIFIC_PID=onlythis", "&PROLIFIC_PID=a1&STUDY_ID=6ae2c1c891a6603199aad8fc", "&PROLIFIC_PID=a1&STUDY_ID=000000000000000000000000&SESSION_ID=s1"]) {
       outside.length = 0;
       await page.goto("/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + qs);
       await expect(page.getByRole("heading", { name: "This link cannot be used" })).toBeVisible();

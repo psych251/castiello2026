@@ -49,7 +49,7 @@ const EXPERIMENT = {
   // Prolific: participants who finish are redirected to Prolific with this completion code. SET
   // BEFORE LAUNCH from the new Prolific study (not Pilot B's code). Until it is set, together with
   // prolific.study_id, the published page does not open.
-  prolific_completion_code: null,
+  prolific_completion_code: "C15R004P", // the Pilot D draft's code (kept from Pilot B, which it duplicates)
 
   // Prolific access (Pilot D). The page needs Prolific's PROLIFIC_PID, STUDY_ID and SESSION_ID in
   // its address, and STUDY_ID must be study_id, before it signs in or saves anything; the chat
@@ -59,7 +59,7 @@ const EXPERIMENT = {
   // the researchers on Prolific instead). Kinds: technical_failure (the chat could not continue),
   // left_after_safety_stop, withdrew, paused.
   prolific: {
-    study_id: null,
+    study_id: "6ae2c1c891a6603199aad8fc", // the Pilot D draft (app.prolific.com/researcher/workspaces/studies/6ae2c1c891a6603199aad8fc)
     early_exit_codes: { technical_failure: null, left_after_safety_stop: null, withdrew: null, paused: null },
   },
 

@@ -1,0 +1,5 @@
+participant_id,type,chat_index,seq,attempt,code,model_provider,model_id,prompt_version,safety_version,ms,rules,categories,finish_reason,flags_for_reply,reason
+pilotD-02,safety_flag,1,11,1,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,1421,"[""provider_block""]","[""provider_block""]",SAFETY,1,
+pilotD-08,safety_flag,2,11,1,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,2394,"[""solicit_identity""]","[""solicits_identifying""]",STOP,1,
+pilotD-R2,participant_ended,1,,,,,,,,,,,,,withdrew
+pilotD-06,safety_flag,1,17,1,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,2156,"[""solicit_identity""]","[""solicits_identifying""]",STOP,1,

@@ -1,0 +1,425 @@
+participant_id,trial_index,task,condition,trial_type,rt,response,time_elapsed,stimulus,plugin_version,experiment_id,chat_mode,consented,bfi_raw,bfi_n_skipped,attention_check_response,attention_check_passed,bfi_items_answered,trait_openness,inverse_openness,trait_conscientiousness,inverse_conscientiousness,trait_extraversion,inverse_extraversion,trait_agreeableness,inverse_agreeableness,trait_neuroticism,inverse_neuroticism,setup_ok,setup_attempts,setup_error,view_history,chat_index,bot_condition,bot_name,n_messages,n_participant_messages,n_bot_messages,participant_chars,n_failed_requests,n_retries,n_auto_resends,ended_reason,duration_ms,server_n_messages,affiliation_coded,affiliation_chat1,affiliation_chat2,affiliation_n_items_chat1,affiliation_n_items_chat2,affiliation_mirror,affiliation_inverse,feedback_task_understanding_answered,feedback_task_understanding_n_chars,feedback_confusion_answered,feedback_confusion_n_chars
+pilotD-R3,0,consent,,html-button-response,1797,0,1810,"
+      <div class=""consent"">
+        <h2>Consent</h2>
+        <p>By answering the following questions, you are participating in a study being performed by
+        cognitive scientists in the Stanford Department of Psychology. If you have questions about
+        this research, please contact us at <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+        You must be at least 18 years old to participate. Your participation in this research is
+        voluntary. You may decline to answer any or all of the following questions. You may decline
+        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        the researchers who have requested your participation will not receive any personal
+        information about you.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-09,0,consent,,html-button-response,144210,0,144226,"
+      <div class=""consent"">
+        <h2>Consent</h2>
+        <p>By answering the following questions, you are participating in a study being performed by
+        cognitive scientists in the Stanford Department of Psychology. If you have questions about
+        this research, please contact us at <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+        You must be at least 18 years old to participate. Your participation in this research is
+        voluntary. You may decline to answer any or all of the following questions. You may decline
+        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        the researchers who have requested your participation will not receive any personal
+        information about you.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-09,2,bfi,,survey,747603,"{""bfi"":{""bfi_01"":2,""bfi_02"":2,""bfi_03"":4,""bfi_04"":3,""bfi_05"":5,""bfi_06"":4,""bfi_07"":4,""bfi_08"":3,""bfi_09"":5,""bfi_10"":5,""bfi_11"":4,""bfi_12"":1,""bfi_13"":4,""bfi_14"":4,""bfi_15"":4,""bfi_16"":4,""bfi_17"":4,""bfi_18"":2,""bfi_19"":3,""bfi_20"":5,""bfi_21"":4,""bfi_22"":4,""attention_check"":2,""bfi_23"":2,""bfi_24"":4,""bfi_25"":5,""bfi_26"":4,""bfi_27"":2,""bfi_28"":4,""bfi_29"":3,""bfi_30"":4,""bfi_31"":3,""bfi_32"":4,""bfi_33"":4,""bfi_34"":4,""bfi_35"":2,""bfi_36"":4,""bfi_37"":2,""bfi_38"":4,""bfi_39"":2,""bfi_44"":4,""bfi_43"":3,""bfi_42"":4,""bfi_41"":2,""bfi_40"":4}}",892011,,4.0.0,castiello2026-pilot-d,live,,"{""bfi_01"":2,""bfi_02"":2,""bfi_03"":4,""bfi_04"":3,""bfi_05"":5,""bfi_06"":4,""bfi_07"":4,""bfi_08"":3,""bfi_09"":5,""bfi_10"":5,""bfi_11"":4,""bfi_12"":1,""bfi_13"":4,""bfi_14"":4,""bfi_15"":4,""bfi_16"":4,""bfi_17"":4,""bfi_18"":2,""bfi_19"":3,""bfi_20"":5,""bfi_21"":4,""bfi_22"":4,""bfi_23"":2,""bfi_24"":4,""bfi_25"":5,""bfi_26"":4,""bfi_27"":2,""bfi_28"":4,""bfi_29"":3,""bfi_30"":4,""bfi_31"":3,""bfi_32"":4,""bfi_33"":4,""bfi_34"":4,""bfi_35"":2,""bfi_36"":4,""bfi_37"":2,""bfi_38"":4,""bfi_39"":2,""bfi_40"":4,""bfi_41"":2,""bfi_42"":4,""bfi_43"":3,""bfi_44"":4}",0,2,true,"{""openness"":10,""conscientiousness"":9,""extraversion"":8,""agreeableness"":9,""neuroticism"":8}",4.4,1.5999999999999996,3.7777777777777777,2.2222222222222223,3.125,2.875,4.111111111111111,1.8888888888888893,2.5,3.5,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-09,3,chat_setup,,chat-setup,,,893621,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,true,1,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-09,4,instructions,,instructions,28161,,921783,,2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,"[{""page_index"":0,""viewing_time"":28161}]",,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-09,5,chat_intro,,html-button-response,25103,0,946892,"<div class=""instructions"">
+        <h2>Your first chat</h2>
+        <p>You will now chat with <strong>Pat</strong>. Pat will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,mirror,,,,,,,,,,,,,,,,,,,,,,
+pilotD-09,6,chat,,live-chat,,,2639136,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,mirror,Pat,24,12,12,1098,0,0,0,complete,1691917,24,,,,,,,,,,,
+pilotD-09,7,chat_intro,,html-button-response,4661,0,2643801,"<div class=""instructions"">
+        <h2>Your second chat</h2>
+        <p>You will now chat with <strong>Alex</strong>. Alex will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,inverse,,,,,,,,,,,,,,,,,,,,,,
+pilotD-09,8,chat,,live-chat,,,3659056,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,inverse,Alex,24,12,12,1116,0,0,0,complete,1014895,24,,,,,,,,,,,
+pilotD-09,9,affiliation,,survey,97729,"{""aff_similar"":{""chat1"":1,""chat2"":-1},""aff_enjoy"":{""chat1"":1,""chat2"":0},""aff_distant"":{""chat1"":-1,""chat2"":1},""aff_understood"":{""chat1"":1,""chat2"":0},""aff_different"":{""chat1"":-1,""chat2"":1},""aff_chat_again"":{""chat1"":2,""chat2"":0},""aff_intro"":null}",3756898,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"{""chat1"":{""similar"":1,""enjoy"":1,""distant"":1,""understood"":1,""different"":1,""chat_again"":2},""chat2"":{""similar"":-1,""enjoy"":0,""distant"":-1,""understood"":0,""different"":-1,""chat_again"":0}}",1.1666666666666667,-0.5,6,6,1.1666666666666667,-0.5,,,,
+pilotD-09,11,feedback,,survey,62081,,3830801,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,true,134,true,2
+pilotD-09,12,debrief,,html-button-response,3633,0,3834440,"
+      <h2>Debrief</h2>
+      <p>Thank you for your participation! This study investigates if people have different feelings of connection towards AI chatbots whose conversational styles remind them of their own characteristics or contrasting ones.</p>
+      <p>The two chat partners are AI chatbots prompted with personality scores calculated from your answers to the personality survey. Your answers were used to influence the chatbot's conversational styles, there's no new model training based on it. We did not mention which chatbot corresponded to which personality profile in advance so that it won't influence your impression ratings, which will help us examine if and how people respond differently to the two profiles. </p>
+      <p>Your questionnaire answers, chat messages, and ratings were recorded for this research. Thank you for your time and contribution.</p>
+      <p>If you have questions about this research, contact
+      <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+      Press the button to save your responses and finish.</p>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-02,0,consent,,html-button-response,2824,0,2831,"
+      <div class=""consent"">
+        <h2>Consent</h2>
+        <p>By answering the following questions, you are participating in a study being performed by
+        cognitive scientists in the Stanford Department of Psychology. If you have questions about
+        this research, please contact us at <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+        You must be at least 18 years old to participate. Your participation in this research is
+        voluntary. You may decline to answer any or all of the following questions. You may decline
+        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        the researchers who have requested your participation will not receive any personal
+        information about you.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-02,2,bfi,,survey,384180,"{""bfi"":{""bfi_01"":4,""bfi_02"":3,""bfi_03"":4,""bfi_04"":1,""bfi_05"":4,""bfi_06"":3,""bfi_07"":4,""bfi_08"":3,""bfi_09"":4,""bfi_10"":4,""bfi_11"":4,""bfi_12"":3,""bfi_13"":4,""bfi_14"":4,""bfi_15"":4,""bfi_16"":4,""bfi_17"":4,""bfi_18"":3,""bfi_19"":4,""bfi_20"":4,""bfi_21"":4,""bfi_22"":4,""attention_check"":2,""bfi_23"":3,""bfi_24"":3,""bfi_25"":4,""bfi_26"":3,""bfi_27"":3,""bfi_28"":4,""bfi_29"":4,""bfi_30"":3,""bfi_31"":4,""bfi_32"":4,""bfi_33"":4,""bfi_34"":4,""bfi_35"":4,""bfi_36"":4,""bfi_37"":3,""bfi_38"":4,""bfi_39"":4,""bfi_40"":4,""bfi_41"":4,""bfi_42"":4,""bfi_43"":3,""bfi_44"":4}}",387073,,4.0.0,castiello2026-pilot-d,live,,"{""bfi_01"":4,""bfi_02"":3,""bfi_03"":4,""bfi_04"":1,""bfi_05"":4,""bfi_06"":3,""bfi_07"":4,""bfi_08"":3,""bfi_09"":4,""bfi_10"":4,""bfi_11"":4,""bfi_12"":3,""bfi_13"":4,""bfi_14"":4,""bfi_15"":4,""bfi_16"":4,""bfi_17"":4,""bfi_18"":3,""bfi_19"":4,""bfi_20"":4,""bfi_21"":4,""bfi_22"":4,""bfi_23"":3,""bfi_24"":3,""bfi_25"":4,""bfi_26"":3,""bfi_27"":3,""bfi_28"":4,""bfi_29"":4,""bfi_30"":3,""bfi_31"":4,""bfi_32"":4,""bfi_33"":4,""bfi_34"":4,""bfi_35"":4,""bfi_36"":4,""bfi_37"":3,""bfi_38"":4,""bfi_39"":4,""bfi_40"":4,""bfi_41"":4,""bfi_42"":4,""bfi_43"":3,""bfi_44"":4}",0,2,true,"{""openness"":10,""conscientiousness"":9,""extraversion"":8,""agreeableness"":9,""neuroticism"":8}",3.5,2.5,3.5555555555555554,2.4444444444444446,3.25,2.75,3.5555555555555554,2.4444444444444446,3,3,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-02,3,chat_setup,,chat-setup,,,387827,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,true,1,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-02,4,instructions,,instructions,13319,,401147,,2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,"[{""page_index"":0,""viewing_time"":13319}]",,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-02,5,chat_intro,,html-button-response,9580,0,410728,"<div class=""instructions"">
+        <h2>Your first chat</h2>
+        <p>You will now chat with <strong>Alex</strong>. Alex will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,,,,,,,,,,,,,,,,,,,,,,
+pilotD-02,6,chat,,live-chat,,,1309046,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,Alex,24,12,12,597,0,0,0,complete,898190,24,,,,,,,,,,,
+pilotD-02,7,chat_intro,,html-button-response,2329,0,1311378,"<div class=""instructions"">
+        <h2>Your second chat</h2>
+        <p>You will now chat with <strong>Pat</strong>. Pat will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,mirror,,,,,,,,,,,,,,,,,,,,,,
+pilotD-02,8,chat,,live-chat,,,1624479,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,mirror,Pat,24,12,12,558,0,0,0,complete,312969,24,,,,,,,,,,,
+pilotD-02,9,affiliation,,survey,43293,"{""aff_similar"":{""chat1"":1,""chat2"":1},""aff_enjoy"":{""chat1"":2,""chat2"":2},""aff_distant"":{""chat1"":-1,""chat2"":-1},""aff_understood"":{""chat1"":0,""chat2"":-1},""aff_different"":{""chat1"":0,""chat2"":0},""aff_chat_again"":{""chat1"":2,""chat2"":2},""aff_intro"":null}",1667807,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"{""chat1"":{""similar"":1,""enjoy"":2,""distant"":1,""understood"":0,""different"":0,""chat_again"":2},""chat2"":{""similar"":1,""enjoy"":2,""distant"":1,""understood"":-1,""different"":0,""chat_again"":2}}",1,0.8333333333333334,6,6,0.8333333333333334,1,,,,
+pilotD-02,11,feedback,,survey,80854,,1756066,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,true,123,true,67
+pilotD-02,12,debrief,,html-button-response,4255,0,1760323,"
+      <h2>Debrief</h2>
+      <p>Thank you for your participation! This study investigates if people have different feelings of connection towards AI chatbots whose conversational styles remind them of their own characteristics or contrasting ones.</p>
+      <p>The two chat partners are AI chatbots prompted with personality scores calculated from your answers to the personality survey. Your answers were used to influence the chatbot's conversational styles, there's no new model training based on it. We did not mention which chatbot corresponded to which personality profile in advance so that it won't influence your impression ratings, which will help us examine if and how people respond differently to the two profiles. </p>
+      <p>Your questionnaire answers, chat messages, and ratings were recorded for this research. Thank you for your time and contribution.</p>
+      <p>If you have questions about this research, contact
+      <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+      Press the button to save your responses and finish.</p>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-05,0,consent,,html-button-response,16267,0,16285,"
+      <div class=""consent"">
+        <h2>Consent</h2>
+        <p>By answering the following questions, you are participating in a study being performed by
+        cognitive scientists in the Stanford Department of Psychology. If you have questions about
+        this research, please contact us at <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+        You must be at least 18 years old to participate. Your participation in this research is
+        voluntary. You may decline to answer any or all of the following questions. You may decline
+        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        the researchers who have requested your participation will not receive any personal
+        information about you.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-05,2,bfi,,survey,346503,"{""bfi"":{""bfi_01"":2,""bfi_02"":1,""bfi_03"":4,""bfi_04"":3,""bfi_05"":4,""bfi_06"":5,""bfi_07"":2,""bfi_08"":1,""bfi_09"":2,""bfi_10"":4,""bfi_11"":3,""bfi_12"":1,""bfi_13"":4,""bfi_14"":2,""bfi_15"":4,""bfi_16"":3,""bfi_17"":4,""bfi_18"":2,""bfi_19"":5,""bfi_20"":4,""bfi_21"":5,""bfi_22"":4,""attention_check"":2,""bfi_23"":3,""bfi_24"":2,""bfi_25"":3,""bfi_26"":2,""bfi_27"":3,""bfi_28"":5,""bfi_29"":3,""bfi_30"":4,""bfi_31"":5,""bfi_32"":4,""bfi_33"":5,""bfi_34"":3,""bfi_35"":2,""bfi_36"":2,""bfi_37"":1,""bfi_38"":4,""bfi_39"":5,""bfi_40"":3,""bfi_41"":1,""bfi_42"":3,""bfi_43"":4,""bfi_44"":3}}",362879,,4.0.0,castiello2026-pilot-d,live,,"{""bfi_01"":2,""bfi_02"":1,""bfi_03"":4,""bfi_04"":3,""bfi_05"":4,""bfi_06"":5,""bfi_07"":2,""bfi_08"":1,""bfi_09"":2,""bfi_10"":4,""bfi_11"":3,""bfi_12"":1,""bfi_13"":4,""bfi_14"":2,""bfi_15"":4,""bfi_16"":3,""bfi_17"":4,""bfi_18"":2,""bfi_19"":5,""bfi_20"":4,""bfi_21"":5,""bfi_22"":4,""bfi_23"":3,""bfi_24"":2,""bfi_25"":3,""bfi_26"":2,""bfi_27"":3,""bfi_28"":5,""bfi_29"":3,""bfi_30"":4,""bfi_31"":5,""bfi_32"":4,""bfi_33"":5,""bfi_34"":3,""bfi_35"":2,""bfi_36"":2,""bfi_37"":1,""bfi_38"":4,""bfi_39"":5,""bfi_40"":3,""bfi_41"":1,""bfi_42"":3,""bfi_43"":4,""bfi_44"":3}",0,2,true,"{""openness"":10,""conscientiousness"":9,""extraversion"":8,""agreeableness"":9,""neuroticism"":8}",3.8,2.2,4,2,1.875,4.125,3.888888888888889,2.111111111111111,3.625,2.375,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-05,3,chat_setup,,chat-setup,,,363635,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,true,1,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-05,4,instructions,,instructions,53527,,417165,,2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,"[{""page_index"":0,""viewing_time"":53527}]",,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-05,5,chat_intro,,html-button-response,12030,0,429197,"<div class=""instructions"">
+        <h2>Your first chat</h2>
+        <p>You will now chat with <strong>Pat</strong>. Pat will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,mirror,,,,,,,,,,,,,,,,,,,,,,
+pilotD-05,6,chat,,live-chat,,,1263149,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,mirror,Pat,24,12,12,1040,0,0,0,complete,833870,24,,,,,,,,,,,
+pilotD-05,7,chat_intro,,html-button-response,7708,0,1270861,"<div class=""instructions"">
+        <h2>Your second chat</h2>
+        <p>You will now chat with <strong>Alex</strong>. Alex will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,inverse,,,,,,,,,,,,,,,,,,,,,,
+pilotD-05,8,chat,,live-chat,,,2067150,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,inverse,Alex,24,12,12,1093,0,0,0,complete,796216,24,,,,,,,,,,,
+pilotD-05,9,affiliation,,survey,69409,"{""aff_similar"":{""chat1"":1,""chat2"":0},""aff_enjoy"":{""chat1"":2,""chat2"":1},""aff_distant"":{""chat1"":-1,""chat2"":-2},""aff_understood"":{""chat1"":2,""chat2"":1},""aff_different"":{""chat1"":-1,""chat2"":-2},""aff_chat_again"":{""chat1"":2,""chat2"":0},""aff_intro"":null}",2136608,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"{""chat1"":{""similar"":1,""enjoy"":2,""distant"":1,""understood"":2,""different"":1,""chat_again"":2},""chat2"":{""similar"":0,""enjoy"":1,""distant"":2,""understood"":1,""different"":2,""chat_again"":0}}",1.5,1,6,6,1.5,1,,,,
+pilotD-05,11,feedback,,survey,97293,,2251873,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,true,116,true,67
+pilotD-05,12,debrief,,html-button-response,19675,0,2271550,"
+      <h2>Debrief</h2>
+      <p>Thank you for your participation! This study investigates if people have different feelings of connection towards AI chatbots whose conversational styles remind them of their own characteristics or contrasting ones.</p>
+      <p>The two chat partners are AI chatbots prompted with personality scores calculated from your answers to the personality survey. Your answers were used to influence the chatbot's conversational styles, there's no new model training based on it. We did not mention which chatbot corresponded to which personality profile in advance so that it won't influence your impression ratings, which will help us examine if and how people respond differently to the two profiles. </p>
+      <p>Your questionnaire answers, chat messages, and ratings were recorded for this research. Thank you for your time and contribution.</p>
+      <p>If you have questions about this research, contact
+      <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+      Press the button to save your responses and finish.</p>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-04,0,consent,,html-button-response,36505,0,36548,"
+      <div class=""consent"">
+        <h2>Consent</h2>
+        <p>By answering the following questions, you are participating in a study being performed by
+        cognitive scientists in the Stanford Department of Psychology. If you have questions about
+        this research, please contact us at <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+        You must be at least 18 years old to participate. Your participation in this research is
+        voluntary. You may decline to answer any or all of the following questions. You may decline
+        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        the researchers who have requested your participation will not receive any personal
+        information about you.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-04,2,bfi,,survey,287887,"{""bfi"":{""bfi_01"":5,""bfi_02"":4,""bfi_03"":5,""bfi_04"":1,""bfi_05"":5,""bfi_06"":1,""bfi_07"":5,""bfi_08"":1,""bfi_09"":4,""bfi_10"":5,""bfi_11"":5,""bfi_12"":2,""bfi_13"":5,""bfi_14"":4,""bfi_15"":5,""bfi_16"":5,""bfi_17"":5,""bfi_18"":1,""bfi_19"":1,""bfi_20"":5,""bfi_21"":1,""bfi_22"":5,""attention_check"":2,""bfi_23"":1,""bfi_24"":4,""bfi_25"":4,""bfi_26"":5,""bfi_27"":4,""bfi_28"":5,""bfi_29"":4,""bfi_30"":5,""bfi_31"":1,""bfi_32"":5,""bfi_33"":5,""bfi_34"":4,""bfi_35"":2,""bfi_36"":5,""bfi_37"":4,""bfi_38"":5,""bfi_39"":1,""bfi_40"":5,""bfi_41"":1,""bfi_42"":1,""bfi_43"":2,""bfi_44"":2}}",325046,,4.0.0,castiello2026-pilot-d,live,,"{""bfi_01"":5,""bfi_02"":4,""bfi_03"":5,""bfi_04"":1,""bfi_05"":5,""bfi_06"":1,""bfi_07"":5,""bfi_08"":1,""bfi_09"":4,""bfi_10"":5,""bfi_11"":5,""bfi_12"":2,""bfi_13"":5,""bfi_14"":4,""bfi_15"":5,""bfi_16"":5,""bfi_17"":5,""bfi_18"":1,""bfi_19"":1,""bfi_20"":5,""bfi_21"":1,""bfi_22"":5,""bfi_23"":1,""bfi_24"":4,""bfi_25"":4,""bfi_26"":5,""bfi_27"":4,""bfi_28"":5,""bfi_29"":4,""bfi_30"":5,""bfi_31"":1,""bfi_32"":5,""bfi_33"":5,""bfi_34"":4,""bfi_35"":2,""bfi_36"":5,""bfi_37"":4,""bfi_38"":5,""bfi_39"":1,""bfi_40"":5,""bfi_41"":1,""bfi_42"":1,""bfi_43"":2,""bfi_44"":2}",0,2,true,"{""openness"":10,""conscientiousness"":9,""extraversion"":8,""agreeableness"":9,""neuroticism"":8}",4.5,1.5,4.888888888888889,1.1111111111111107,5,1,3.4444444444444446,2.5555555555555554,2.125,3.875,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-04,3,chat_setup,,chat-setup,,,326463,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,true,1,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-04,4,instructions,,instructions,22681,,349147,,2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,"[{""page_index"":0,""viewing_time"":22680}]",,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-04,5,chat_intro,,html-button-response,14297,0,363453,"<div class=""instructions"">
+        <h2>Your first chat</h2>
+        <p>You will now chat with <strong>Alex</strong>. Alex will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,mirror,,,,,,,,,,,,,,,,,,,,,,
+pilotD-04,6,chat,,live-chat,,,1240449,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,mirror,Alex,24,12,12,768,0,0,0,complete,876642,24,,,,,,,,,,,
+pilotD-04,7,chat_intro,,html-button-response,5819,0,1246287,"<div class=""instructions"">
+        <h2>Your second chat</h2>
+        <p>You will now chat with <strong>Pat</strong>. Pat will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,inverse,,,,,,,,,,,,,,,,,,,,,,
+pilotD-04,8,chat,,live-chat,,,1876154,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,inverse,Pat,24,12,12,558,0,0,0,complete,629520,24,,,,,,,,,,,
+pilotD-04,9,affiliation,,survey,90819,"{""aff_similar"":{""chat1"":2,""chat2"":-1},""aff_enjoy"":{""chat1"":2,""chat2"":2},""aff_distant"":{""chat1"":-2,""chat2"":-2},""aff_understood"":{""chat1"":2,""chat2"":1},""aff_different"":{""chat1"":-2,""chat2"":1},""aff_chat_again"":{""chat1"":2,""chat2"":1},""aff_intro"":null}",1967303,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"{""chat1"":{""similar"":2,""enjoy"":2,""distant"":2,""understood"":2,""different"":2,""chat_again"":2},""chat2"":{""similar"":-1,""enjoy"":2,""distant"":2,""understood"":1,""different"":-1,""chat_again"":1}}",2,0.6666666666666666,6,6,2,0.6666666666666666,,,,
+pilotD-04,11,feedback,,survey,87013,,2066224,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,true,35,true,14
+pilotD-04,12,debrief,,html-button-response,14588,0,2080819,"
+      <h2>Debrief</h2>
+      <p>Thank you for your participation! This study investigates if people have different feelings of connection towards AI chatbots whose conversational styles remind them of their own characteristics or contrasting ones.</p>
+      <p>The two chat partners are AI chatbots prompted with personality scores calculated from your answers to the personality survey. Your answers were used to influence the chatbot's conversational styles, there's no new model training based on it. We did not mention which chatbot corresponded to which personality profile in advance so that it won't influence your impression ratings, which will help us examine if and how people respond differently to the two profiles. </p>
+      <p>Your questionnaire answers, chat messages, and ratings were recorded for this research. Thank you for your time and contribution.</p>
+      <p>If you have questions about this research, contact
+      <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+      Press the button to save your responses and finish.</p>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-08,0,consent,,html-button-response,3020,0,3047,"
+      <div class=""consent"">
+        <h2>Consent</h2>
+        <p>By answering the following questions, you are participating in a study being performed by
+        cognitive scientists in the Stanford Department of Psychology. If you have questions about
+        this research, please contact us at <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+        You must be at least 18 years old to participate. Your participation in this research is
+        voluntary. You may decline to answer any or all of the following questions. You may decline
+        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        the researchers who have requested your participation will not receive any personal
+        information about you.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-08,2,bfi,,survey,170545,"{""bfi"":{""bfi_01"":4,""bfi_02"":4,""bfi_03"":4,""bfi_04"":1,""bfi_05"":2,""bfi_06"":2,""bfi_07"":4,""bfi_08"":4,""bfi_09"":4,""bfi_10"":5,""bfi_11"":4,""bfi_12"":1,""bfi_13"":5,""bfi_14"":2,""bfi_15"":4,""bfi_16"":4,""bfi_17"":4,""bfi_18"":1,""bfi_19"":3,""bfi_20"":4,""bfi_21"":2,""bfi_22"":2,""attention_check"":2,""bfi_23"":2,""bfi_24"":4,""bfi_25"":2,""bfi_26"":2,""bfi_27"":2,""bfi_28"":5,""bfi_29"":2,""bfi_30"":4,""bfi_31"":2,""bfi_32"":5,""bfi_33"":4,""bfi_34"":4,""bfi_35"":4,""bfi_36"":5,""bfi_37"":4,""bfi_38"":4,""bfi_39"":3,""bfi_40"":4,""bfi_41"":2,""bfi_42"":5,""bfi_43"":3,""bfi_44"":5}}",173900,,4.0.0,castiello2026-pilot-d,live,,"{""bfi_01"":4,""bfi_02"":4,""bfi_03"":4,""bfi_04"":1,""bfi_05"":2,""bfi_06"":2,""bfi_07"":4,""bfi_08"":4,""bfi_09"":4,""bfi_10"":5,""bfi_11"":4,""bfi_12"":1,""bfi_13"":5,""bfi_14"":2,""bfi_15"":4,""bfi_16"":4,""bfi_17"":4,""bfi_18"":1,""bfi_19"":3,""bfi_20"":4,""bfi_21"":2,""bfi_22"":2,""bfi_23"":2,""bfi_24"":4,""bfi_25"":2,""bfi_26"":2,""bfi_27"":2,""bfi_28"":5,""bfi_29"":2,""bfi_30"":4,""bfi_31"":2,""bfi_32"":5,""bfi_33"":4,""bfi_34"":4,""bfi_35"":4,""bfi_36"":5,""bfi_37"":4,""bfi_38"":4,""bfi_39"":3,""bfi_40"":4,""bfi_41"":2,""bfi_42"":5,""bfi_43"":3,""bfi_44"":5}",0,2,true,"{""openness"":10,""conscientiousness"":9,""extraversion"":8,""agreeableness"":9,""neuroticism"":8}",3.6,2.4,4,2,3.875,2.125,3.6666666666666665,2.3333333333333335,2.125,3.875,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-08,3,chat_setup,,chat-setup,,,174716,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,true,1,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-08,4,instructions,,instructions,17038,,191756,,2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,"[{""page_index"":0,""viewing_time"":17038}]",,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-08,5,chat_intro,,html-button-response,7050,0,198809,"<div class=""instructions"">
+        <h2>Your first chat</h2>
+        <p>You will now chat with <strong>Pat</strong>. Pat will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,mirror,,,,,,,,,,,,,,,,,,,,,,
+pilotD-08,6,chat,,live-chat,,,665218,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,mirror,Pat,24,12,12,1007,0,0,0,complete,466196,24,,,,,,,,,,,
+pilotD-08,7,chat_intro,,html-button-response,12409,0,677634,"<div class=""instructions"">
+        <h2>Your second chat</h2>
+        <p>You will now chat with <strong>Alex</strong>. Alex will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,inverse,,,,,,,,,,,,,,,,,,,,,,
+pilotD-08,8,chat,,live-chat,,,1123959,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,inverse,Alex,24,12,12,1065,0,0,0,complete,446100,24,,,,,,,,,,,
+pilotD-08,9,affiliation,,survey,115091,"{""aff_similar"":{""chat2"":1,""chat1"":0},""aff_enjoy"":{""chat1"":1,""chat2"":0},""aff_distant"":{""chat1"":1,""chat2"":1},""aff_understood"":{""chat1"":1,""chat2"":1},""aff_different"":{""chat1"":0,""chat2"":-1},""aff_chat_again"":{""chat1"":1,""chat2"":-1},""aff_intro"":null}",1239162,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"{""chat1"":{""similar"":0,""enjoy"":1,""distant"":-1,""understood"":1,""different"":0,""chat_again"":1},""chat2"":{""similar"":1,""enjoy"":0,""distant"":-1,""understood"":1,""different"":1,""chat_again"":-1}}",0.3333333333333333,0.16666666666666666,6,6,0.3333333333333333,0.16666666666666666,,,,
+pilotD-08,11,feedback,,survey,40190,,1286465,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,true,137,true,17
+pilotD-08,12,debrief,,html-button-response,12977,0,1299446,"
+      <h2>Debrief</h2>
+      <p>Thank you for your participation! This study investigates if people have different feelings of connection towards AI chatbots whose conversational styles remind them of their own characteristics or contrasting ones.</p>
+      <p>The two chat partners are AI chatbots prompted with personality scores calculated from your answers to the personality survey. Your answers were used to influence the chatbot's conversational styles, there's no new model training based on it. We did not mention which chatbot corresponded to which personality profile in advance so that it won't influence your impression ratings, which will help us examine if and how people respond differently to the two profiles. </p>
+      <p>Your questionnaire answers, chat messages, and ratings were recorded for this research. Thank you for your time and contribution.</p>
+      <p>If you have questions about this research, contact
+      <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+      Press the button to save your responses and finish.</p>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-R2,0,consent,,html-button-response,65,0,76,"
+      <div class=""consent"">
+        <h2>Consent</h2>
+        <p>By answering the following questions, you are participating in a study being performed by
+        cognitive scientists in the Stanford Department of Psychology. If you have questions about
+        this research, please contact us at <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+        You must be at least 18 years old to participate. Your participation in this research is
+        voluntary. You may decline to answer any or all of the following questions. You may decline
+        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        the researchers who have requested your participation will not receive any personal
+        information about you.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-R2,2,bfi,,survey,93,"{""bfi"":{""bfi_01"":3,""bfi_02"":5,""bfi_03"":2,""bfi_04"":4,""bfi_05"":1,""bfi_06"":3,""bfi_07"":5,""bfi_08"":2,""bfi_09"":4,""bfi_10"":1,""bfi_11"":3,""bfi_12"":5,""bfi_13"":2,""bfi_14"":4,""bfi_15"":1,""bfi_16"":3,""bfi_17"":5,""bfi_18"":2,""bfi_19"":4,""bfi_20"":1,""bfi_21"":3,""bfi_22"":5,""bfi_23"":2,""bfi_24"":4,""bfi_25"":1,""bfi_26"":3,""bfi_27"":5,""bfi_28"":2,""bfi_29"":4,""bfi_30"":1,""bfi_31"":3,""bfi_32"":5,""bfi_33"":2,""bfi_34"":4,""bfi_35"":1,""bfi_36"":3,""bfi_37"":5,""bfi_38"":2,""bfi_39"":4,""bfi_40"":1,""bfi_41"":3,""bfi_42"":5,""bfi_43"":2,""bfi_44"":4,""attention_check"":2}}",206,,4.0.0,castiello2026-pilot-d,live,,"{""bfi_01"":3,""bfi_02"":5,""bfi_03"":2,""bfi_04"":4,""bfi_05"":1,""bfi_06"":3,""bfi_07"":5,""bfi_08"":2,""bfi_09"":4,""bfi_10"":1,""bfi_11"":3,""bfi_12"":5,""bfi_13"":2,""bfi_14"":4,""bfi_15"":1,""bfi_16"":3,""bfi_17"":5,""bfi_18"":2,""bfi_19"":4,""bfi_20"":1,""bfi_21"":3,""bfi_22"":5,""bfi_23"":2,""bfi_24"":4,""bfi_25"":1,""bfi_26"":3,""bfi_27"":5,""bfi_28"":2,""bfi_29"":4,""bfi_30"":1,""bfi_31"":3,""bfi_32"":5,""bfi_33"":2,""bfi_34"":4,""bfi_35"":1,""bfi_36"":3,""bfi_37"":5,""bfi_38"":2,""bfi_39"":4,""bfi_40"":1,""bfi_41"":3,""bfi_42"":5,""bfi_43"":2,""bfi_44"":4}",0,2,true,"{""openness"":10,""conscientiousness"":9,""extraversion"":8,""agreeableness"":9,""neuroticism"":8}",1.9,4.1,2.888888888888889,3.111111111111111,3,3,3.2222222222222223,2.7777777777777777,3.25,2.75,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-R2,3,chat_setup,,chat-setup,,,1272,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,true,1,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-R2,4,instructions,,instructions,246,,1519,,2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,"[{""page_index"":0,""viewing_time"":246}]",,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-R2,5,chat_intro,,html-button-response,30,0,1550,"<div class=""instructions"">
+        <h2>Your first chat</h2>
+        <p>You will now chat with <strong>Pat</strong>. Pat will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,,,,,,,,,,,,,,,,,,,,,,
+pilotD-R2,6,chat,,live-chat,,,10549,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,Pat,5,2,3,96,0,0,0,withdrew,8927,5,,,,,,,,,,,
+pilotD-03,0,consent,,html-button-response,4191,0,4206,"
+      <div class=""consent"">
+        <h2>Consent</h2>
+        <p>By answering the following questions, you are participating in a study being performed by
+        cognitive scientists in the Stanford Department of Psychology. If you have questions about
+        this research, please contact us at <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+        You must be at least 18 years old to participate. Your participation in this research is
+        voluntary. You may decline to answer any or all of the following questions. You may decline
+        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        the researchers who have requested your participation will not receive any personal
+        information about you.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-03,2,bfi,,survey,94489,"{""bfi"":{""bfi_01"":3,""bfi_02"":4,""bfi_03"":5,""bfi_04"":2,""bfi_05"":5,""bfi_06"":4,""bfi_07"":3,""bfi_08"":2,""bfi_09"":5,""bfi_10"":5,""bfi_11"":3,""bfi_12"":3,""bfi_13"":4,""bfi_14"":3,""bfi_15"":5,""bfi_16"":3,""bfi_17"":4,""bfi_18"":2,""bfi_19"":2,""bfi_20"":5,""bfi_21"":4,""bfi_22"":3,""attention_check"":2,""bfi_23"":2,""bfi_24"":5,""bfi_25"":5,""bfi_26"":3,""bfi_27"":5,""bfi_28"":5,""bfi_29"":2,""bfi_30"":5,""bfi_31"":4,""bfi_32"":4,""bfi_33"":4,""bfi_34"":4,""bfi_35"":1,""bfi_36"":3,""bfi_37"":3,""bfi_38"":5,""bfi_39"":2,""bfi_40"":5,""bfi_41"":1,""bfi_42"":3,""bfi_43"":3,""bfi_44"":5}}",98789,,4.0.0,castiello2026-pilot-d,live,,"{""bfi_01"":3,""bfi_02"":4,""bfi_03"":5,""bfi_04"":2,""bfi_05"":5,""bfi_06"":4,""bfi_07"":3,""bfi_08"":2,""bfi_09"":5,""bfi_10"":5,""bfi_11"":3,""bfi_12"":3,""bfi_13"":4,""bfi_14"":3,""bfi_15"":5,""bfi_16"":3,""bfi_17"":4,""bfi_18"":2,""bfi_19"":2,""bfi_20"":5,""bfi_21"":4,""bfi_22"":3,""bfi_23"":2,""bfi_24"":5,""bfi_25"":5,""bfi_26"":3,""bfi_27"":5,""bfi_28"":5,""bfi_29"":2,""bfi_30"":5,""bfi_31"":4,""bfi_32"":4,""bfi_33"":4,""bfi_34"":4,""bfi_35"":1,""bfi_36"":3,""bfi_37"":3,""bfi_38"":5,""bfi_39"":2,""bfi_40"":5,""bfi_41"":1,""bfi_42"":3,""bfi_43"":3,""bfi_44"":5}",0,2,true,"{""openness"":10,""conscientiousness"":9,""extraversion"":8,""agreeableness"":9,""neuroticism"":8}",5,1,4.222222222222222,1.7777777777777777,2.625,3.375,2.888888888888889,3.111111111111111,1.875,4.125,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-03,3,chat_setup,,chat-setup,,,99860,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,true,1,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-03,4,instructions,,instructions,12203,,112064,,2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,"[{""page_index"":0,""viewing_time"":12203}]",,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-03,5,chat_intro,,html-button-response,3361,0,115426,"<div class=""instructions"">
+        <h2>Your first chat</h2>
+        <p>You will now chat with <strong>Alex</strong>. Alex will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,,,,,,,,,,,,,,,,,,,,,,
+pilotD-03,6,chat,,live-chat,,,553449,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,Alex,24,12,12,1000,0,0,0,complete,437744,24,,,,,,,,,,,
+pilotD-03,7,chat_intro,,html-button-response,3196,0,556647,"<div class=""instructions"">
+        <h2>Your second chat</h2>
+        <p>You will now chat with <strong>Pat</strong>. Pat will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,mirror,,,,,,,,,,,,,,,,,,,,,,
+pilotD-03,8,chat,,live-chat,,,1060627,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,mirror,Pat,24,12,12,1165,0,0,0,complete,503699,24,,,,,,,,,,,
+pilotD-03,9,affiliation,,survey,27440,"{""aff_similar"":{""chat1"":-1,""chat2"":2},""aff_enjoy"":{""chat1"":1,""chat2"":2},""aff_distant"":{""chat1"":2,""chat2"":-1},""aff_understood"":{""chat1"":1,""chat2"":1},""aff_different"":{""chat1"":2,""chat2"":2},""aff_chat_again"":{""chat1"":-1,""chat2"":1},""aff_intro"":null}",1088119,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"{""chat1"":{""similar"":-1,""enjoy"":1,""distant"":-2,""understood"":1,""different"":-2,""chat_again"":-1},""chat2"":{""similar"":2,""enjoy"":2,""distant"":1,""understood"":1,""different"":-2,""chat_again"":1}}",-0.6666666666666666,0.8333333333333334,6,6,0.8333333333333334,-0.6666666666666666,,,,
+pilotD-03,11,feedback,,survey,23581,,1118507,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,true,63,true,16
+pilotD-03,12,debrief,,html-button-response,21517,0,1140027,"
+      <h2>Debrief</h2>
+      <p>Thank you for your participation! This study investigates if people have different feelings of connection towards AI chatbots whose conversational styles remind them of their own characteristics or contrasting ones.</p>
+      <p>The two chat partners are AI chatbots prompted with personality scores calculated from your answers to the personality survey. Your answers were used to influence the chatbot's conversational styles, there's no new model training based on it. We did not mention which chatbot corresponded to which personality profile in advance so that it won't influence your impression ratings, which will help us examine if and how people respond differently to the two profiles. </p>
+      <p>Your questionnaire answers, chat messages, and ratings were recorded for this research. Thank you for your time and contribution.</p>
+      <p>If you have questions about this research, contact
+      <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+      Press the button to save your responses and finish.</p>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-07,0,consent,,html-button-response,7894,0,7900,"
+      <div class=""consent"">
+        <h2>Consent</h2>
+        <p>By answering the following questions, you are participating in a study being performed by
+        cognitive scientists in the Stanford Department of Psychology. If you have questions about
+        this research, please contact us at <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+        You must be at least 18 years old to participate. Your participation in this research is
+        voluntary. You may decline to answer any or all of the following questions. You may decline
+        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        the researchers who have requested your participation will not receive any personal
+        information about you.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-07,2,bfi,,survey,327319,"{""bfi"":{""bfi_01"":2,""bfi_02"":3,""bfi_03"":4,""bfi_04"":2,""bfi_05"":5,""bfi_06"":4,""bfi_07"":4,""bfi_08"":2,""bfi_09"":3,""bfi_10"":5,""bfi_11"":2,""bfi_12"":1,""bfi_13"":5,""bfi_14"":3,""bfi_15"":4,""bfi_16"":3,""bfi_17"":4,""bfi_18"":2,""bfi_19"":2,""bfi_20"":5,""bfi_21"":5,""bfi_22"":4,""attention_check"":2,""bfi_23"":2,""bfi_24"":4,""bfi_25"":3,""bfi_26"":3,""bfi_27"":2,""bfi_28"":4,""bfi_29"":2,""bfi_30"":4,""bfi_31"":3,""bfi_32"":5,""bfi_33"":4,""bfi_34"":4,""bfi_35"":3,""bfi_36"":2,""bfi_37"":1,""bfi_38"":4,""bfi_39"":2,""bfi_40"":5,""bfi_41"":1,""bfi_42"":4,""bfi_43"":3,""bfi_44"":3}}",335265,,4.0.0,castiello2026-pilot-d,live,,"{""bfi_01"":2,""bfi_02"":3,""bfi_03"":4,""bfi_04"":2,""bfi_05"":5,""bfi_06"":4,""bfi_07"":4,""bfi_08"":2,""bfi_09"":3,""bfi_10"":5,""bfi_11"":2,""bfi_12"":1,""bfi_13"":5,""bfi_14"":3,""bfi_15"":4,""bfi_16"":3,""bfi_17"":4,""bfi_18"":2,""bfi_19"":2,""bfi_20"":5,""bfi_21"":5,""bfi_22"":4,""bfi_23"":2,""bfi_24"":4,""bfi_25"":3,""bfi_26"":3,""bfi_27"":2,""bfi_28"":4,""bfi_29"":2,""bfi_30"":4,""bfi_31"":3,""bfi_32"":5,""bfi_33"":4,""bfi_34"":4,""bfi_35"":3,""bfi_36"":2,""bfi_37"":1,""bfi_38"":4,""bfi_39"":2,""bfi_40"":5,""bfi_41"":1,""bfi_42"":4,""bfi_43"":3,""bfi_44"":3}",0,2,true,"{""openness"":10,""conscientiousness"":9,""extraversion"":8,""agreeableness"":9,""neuroticism"":8}",4.2,1.7999999999999998,4,2,2.25,3.75,4.222222222222222,1.7777777777777777,2.25,3.75,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-07,3,chat_setup,,chat-setup,,,336060,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,true,1,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-07,4,instructions,,instructions,19566,,355628,,2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,"[{""page_index"":0,""viewing_time"":19566}]",,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-07,5,chat_intro,,html-button-response,10302,0,365932,"<div class=""instructions"">
+        <h2>Your first chat</h2>
+        <p>You will now chat with <strong>Alex</strong>. Alex will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,,,,,,,,,,,,,,,,,,,,,,
+pilotD-07,6,chat,,live-chat,,,848493,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,Alex,24,12,12,798,0,0,0,complete,482414,24,,,,,,,,,,,
+pilotD-07,7,chat_intro,,html-button-response,7212,0,855708,"<div class=""instructions"">
+        <h2>Your second chat</h2>
+        <p>You will now chat with <strong>Pat</strong>. Pat will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,mirror,,,,,,,,,,,,,,,,,,,,,,
+pilotD-07,8,chat,,live-chat,,,1201636,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,mirror,Pat,24,12,12,718,0,0,0,complete,345776,24,,,,,,,,,,,
+pilotD-07,9,affiliation,,survey,70001,"{""aff_similar"":{""chat1"":-1,""chat2"":1},""aff_enjoy"":{""chat1"":-1,""chat2"":2},""aff_distant"":{""chat1"":0,""chat2"":-1},""aff_understood"":{""chat1"":-1,""chat2"":1},""aff_different"":{""chat1"":0,""chat2"":-1},""aff_chat_again"":{""chat1"":-1,""chat2"":2},""aff_intro"":null}",1271666,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"{""chat1"":{""similar"":-1,""enjoy"":-1,""distant"":0,""understood"":-1,""different"":0,""chat_again"":-1},""chat2"":{""similar"":1,""enjoy"":2,""distant"":1,""understood"":1,""different"":1,""chat_again"":2}}",-0.6666666666666666,1.3333333333333333,6,6,1.3333333333333333,-0.6666666666666666,,,,
+pilotD-07,11,feedback,,survey,85502,,1368453,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,true,224,true,3
+pilotD-07,12,debrief,,html-button-response,27102,0,1395556,"
+      <h2>Debrief</h2>
+      <p>Thank you for your participation! This study investigates if people have different feelings of connection towards AI chatbots whose conversational styles remind them of their own characteristics or contrasting ones.</p>
+      <p>The two chat partners are AI chatbots prompted with personality scores calculated from your answers to the personality survey. Your answers were used to influence the chatbot's conversational styles, there's no new model training based on it. We did not mention which chatbot corresponded to which personality profile in advance so that it won't influence your impression ratings, which will help us examine if and how people respond differently to the two profiles. </p>
+      <p>Your questionnaire answers, chat messages, and ratings were recorded for this research. Thank you for your time and contribution.</p>
+      <p>If you have questions about this research, contact
+      <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+      Press the button to save your responses and finish.</p>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-06,0,consent,,html-button-response,3040,0,3057,"
+      <div class=""consent"">
+        <h2>Consent</h2>
+        <p>By answering the following questions, you are participating in a study being performed by
+        cognitive scientists in the Stanford Department of Psychology. If you have questions about
+        this research, please contact us at <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+        You must be at least 18 years old to participate. Your participation in this research is
+        voluntary. You may decline to answer any or all of the following questions. You may decline
+        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        the researchers who have requested your participation will not receive any personal
+        information about you.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-06,2,bfi,,survey,167045,"{""bfi"":{""bfi_01"":3,""bfi_02"":2,""bfi_03"":4,""bfi_04"":1,""bfi_05"":4,""bfi_06"":4,""bfi_07"":4,""bfi_08"":3,""bfi_09"":4,""bfi_10"":4,""bfi_11"":5,""bfi_12"":2,""bfi_13"":5,""bfi_14"":3,""bfi_15"":4,""bfi_16"":4,""bfi_17"":4,""bfi_18"":2,""bfi_19"":1,""bfi_20"":4,""bfi_21"":5,""bfi_22"":4,""attention_check"":2,""bfi_23"":1,""bfi_24"":5,""bfi_25"":4,""bfi_26"":4,""bfi_27"":3,""bfi_28"":4,""bfi_29"":3,""bfi_30"":4,""bfi_31"":5,""bfi_32"":3,""bfi_33"":3,""bfi_34"":4,""bfi_35"":4,""bfi_36"":4,""bfi_37"":4,""bfi_38"":3,""bfi_39"":3,""bfi_40"":3,""bfi_41"":4,""bfi_42"":4,""bfi_43"":4,""bfi_44"":3}}",170834,,4.0.0,castiello2026-pilot-d,live,,"{""bfi_01"":3,""bfi_02"":2,""bfi_03"":4,""bfi_04"":1,""bfi_05"":4,""bfi_06"":4,""bfi_07"":4,""bfi_08"":3,""bfi_09"":4,""bfi_10"":4,""bfi_11"":5,""bfi_12"":2,""bfi_13"":5,""bfi_14"":3,""bfi_15"":4,""bfi_16"":4,""bfi_17"":4,""bfi_18"":2,""bfi_19"":1,""bfi_20"":4,""bfi_21"":5,""bfi_22"":4,""bfi_23"":1,""bfi_24"":5,""bfi_25"":4,""bfi_26"":4,""bfi_27"":3,""bfi_28"":4,""bfi_29"":3,""bfi_30"":4,""bfi_31"":5,""bfi_32"":3,""bfi_33"":3,""bfi_34"":4,""bfi_35"":4,""bfi_36"":4,""bfi_37"":4,""bfi_38"":3,""bfi_39"":3,""bfi_40"":3,""bfi_41"":4,""bfi_42"":4,""bfi_43"":4,""bfi_44"":3}",0,2,true,"{""openness"":10,""conscientiousness"":9,""extraversion"":8,""agreeableness"":9,""neuroticism"":8}",3.4,2.6,3.6666666666666665,2.3333333333333335,3,3,3.5555555555555554,2.4444444444444446,2,4,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-06,3,chat_setup,,chat-setup,,,173488,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,true,1,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-06,4,instructions,,instructions,18966,,192458,,2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,"[{""page_index"":0,""viewing_time"":18966}]",,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-06,5,chat_intro,,html-button-response,11635,0,204098,"<div class=""instructions"">
+        <h2>Your first chat</h2>
+        <p>You will now chat with <strong>Alex</strong>. Alex will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,,,,,,,,,,,,,,,,,,,,,,
+pilotD-06,6,chat,,live-chat,,,659377,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,Alex,24,12,12,386,0,0,0,complete,454850,24,,,,,,,,,,,
+pilotD-06,7,chat_intro,,html-button-response,5425,0,664808,"<div class=""instructions"">
+        <h2>Your second chat</h2>
+        <p>You will now chat with <strong>Pat</strong>. Pat will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,mirror,,,,,,,,,,,,,,,,,,,,,,
+pilotD-06,8,chat,,live-chat,,,1045579,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,mirror,Pat,24,12,12,356,0,0,0,complete,380314,24,,,,,,,,,,,
+pilotD-06,9,affiliation,,survey,34468,"{""aff_similar"":{""chat1"":1,""chat2"":2},""aff_enjoy"":{""chat1"":2,""chat2"":2},""aff_distant"":{""chat1"":-1,""chat2"":-2},""aff_understood"":{""chat1"":1,""chat2"":1},""aff_different"":{""chat1"":-1,""chat2"":-1},""aff_chat_again"":{""chat1"":1,""chat2"":1},""aff_intro"":null}",1081265,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"{""chat1"":{""similar"":1,""enjoy"":2,""distant"":1,""understood"":1,""different"":1,""chat_again"":1},""chat2"":{""similar"":2,""enjoy"":2,""distant"":2,""understood"":1,""different"":1,""chat_again"":1}}",1.1666666666666667,1.5,6,6,1.5,1.1666666666666667,,,,
+pilotD-06,11,feedback,,survey,48359,,1140829,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,true,48,true,4
+pilotD-06,12,debrief,,html-button-response,4241,0,1145073,"
+      <h2>Debrief</h2>
+      <p>Thank you for your participation! This study investigates if people have different feelings of connection towards AI chatbots whose conversational styles remind them of their own characteristics or contrasting ones.</p>
+      <p>The two chat partners are AI chatbots prompted with personality scores calculated from your answers to the personality survey. Your answers were used to influence the chatbot's conversational styles, there's no new model training based on it. We did not mention which chatbot corresponded to which personality profile in advance so that it won't influence your impression ratings, which will help us examine if and how people respond differently to the two profiles. </p>
+      <p>Your questionnaire answers, chat messages, and ratings were recorded for this research. Thank you for your time and contribution.</p>
+      <p>If you have questions about this research, contact
+      <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+      Press the button to save your responses and finish.</p>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-01,0,consent,,html-button-response,17250,0,17259,"
+      <div class=""consent"">
+        <h2>Consent</h2>
+        <p>By answering the following questions, you are participating in a study being performed by
+        cognitive scientists in the Stanford Department of Psychology. If you have questions about
+        this research, please contact us at <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+        You must be at least 18 years old to participate. Your participation in this research is
+        voluntary. You may decline to answer any or all of the following questions. You may decline
+        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        the researchers who have requested your participation will not receive any personal
+        information about you.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-01,2,bfi,,survey,146502,"{""bfi"":{""bfi_01"":5,""bfi_02"":1,""bfi_03"":5,""bfi_04"":1,""bfi_05"":5,""bfi_06"":1,""bfi_07"":5,""bfi_08"":1,""bfi_09"":4,""bfi_10"":5,""bfi_11"":4,""bfi_12"":1,""bfi_13"":5,""bfi_14"":2,""bfi_15"":4,""bfi_16"":5,""bfi_17"":5,""bfi_18"":1,""bfi_19"":2,""bfi_20"":4,""bfi_21"":1,""bfi_22"":5,""attention_check"":2,""bfi_23"":1,""bfi_24"":4,""bfi_25"":5,""bfi_26"":5,""bfi_27"":1,""bfi_28"":5,""bfi_29"":1,""bfi_30"":5,""bfi_31"":1,""bfi_32"":5,""bfi_33"":5,""bfi_34"":4,""bfi_35"":2,""bfi_36"":5,""bfi_37"":1,""bfi_38"":5,""bfi_39"":2,""bfi_40"":5,""bfi_41"":2,""bfi_42"":5,""bfi_43"":1,""bfi_44"":4}}",163833,,4.0.0,castiello2026-pilot-d,live,,"{""bfi_01"":5,""bfi_02"":1,""bfi_03"":5,""bfi_04"":1,""bfi_05"":5,""bfi_06"":1,""bfi_07"":5,""bfi_08"":1,""bfi_09"":4,""bfi_10"":5,""bfi_11"":4,""bfi_12"":1,""bfi_13"":5,""bfi_14"":2,""bfi_15"":4,""bfi_16"":5,""bfi_17"":5,""bfi_18"":1,""bfi_19"":2,""bfi_20"":4,""bfi_21"":1,""bfi_22"":5,""bfi_23"":1,""bfi_24"":4,""bfi_25"":5,""bfi_26"":5,""bfi_27"":1,""bfi_28"":5,""bfi_29"":1,""bfi_30"":5,""bfi_31"":1,""bfi_32"":5,""bfi_33"":5,""bfi_34"":4,""bfi_35"":2,""bfi_36"":5,""bfi_37"":1,""bfi_38"":5,""bfi_39"":2,""bfi_40"":5,""bfi_41"":2,""bfi_42"":5,""bfi_43"":1,""bfi_44"":4}",0,2,true,"{""openness"":10,""conscientiousness"":9,""extraversion"":8,""agreeableness"":9,""neuroticism"":8}",4.5,1.5,5,1,4.875,1.125,5,1,1.75,4.25,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-01,3,chat_setup,,chat-setup,,,164977,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,true,1,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-01,4,instructions,,instructions,11378,,176357,,2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,"[{""page_index"":0,""viewing_time"":11378}]",,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-01,5,chat_intro,,html-button-response,6263,0,182623,"<div class=""instructions"">
+        <h2>Your first chat</h2>
+        <p>You will now chat with <strong>Alex</strong>. Alex will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,,,,,,,,,,,,,,,,,,,,,,
+pilotD-01,6,chat,,live-chat,,,1430043,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,Alex,24,12,12,3223,0,0,0,complete,1247304,24,,,,,,,,,,,
+pilotD-01,7,chat_intro,,html-button-response,5911,0,1435959,"<div class=""instructions"">
+        <h2>Your second chat</h2>
+        <p>You will now chat with <strong>Pat</strong>. Pat will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,mirror,,,,,,,,,,,,,,,,,,,,,,
+pilotD-01,8,chat,,live-chat,,,2397900,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,mirror,Pat,24,12,12,2329,0,0,0,complete,961837,24,,,,,,,,,,,
+pilotD-01,9,affiliation,,survey,58515,"{""aff_similar"":{""chat1"":-2,""chat2"":2},""aff_enjoy"":{""chat1"":-1,""chat2"":2},""aff_distant"":{""chat1"":-1,""chat2"":-2},""aff_understood"":{""chat1"":-1,""chat2"":2},""aff_different"":{""chat1"":-1,""chat2"":-2},""aff_chat_again"":{""chat1"":-2,""chat2"":2},""aff_intro"":null}",2456463,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"{""chat1"":{""similar"":-2,""enjoy"":-1,""distant"":1,""understood"":-1,""different"":1,""chat_again"":-2},""chat2"":{""similar"":2,""enjoy"":2,""distant"":2,""understood"":2,""different"":2,""chat_again"":2}}",-0.6666666666666666,2,6,6,2,-0.6666666666666666,,,,
+pilotD-01,11,feedback,,survey,72947,,2534354,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,true,61,true,83
+pilotD-01,12,debrief,,html-button-response,4709,0,2539067,"
+      <h2>Debrief</h2>
+      <p>Thank you for your participation! This study investigates if people have different feelings of connection towards AI chatbots whose conversational styles remind them of their own characteristics or contrasting ones.</p>
+      <p>The two chat partners are AI chatbots prompted with personality scores calculated from your answers to the personality survey. Your answers were used to influence the chatbot's conversational styles, there's no new model training based on it. We did not mention which chatbot corresponded to which personality profile in advance so that it won't influence your impression ratings, which will help us examine if and how people respond differently to the two profiles. </p>
+      <p>Your questionnaire answers, chat messages, and ratings were recorded for this research. Thank you for your time and contribution.</p>
+      <p>If you have questions about this research, contact
+      <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+      Press the button to save your responses and finish.</p>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-10,0,consent,,html-button-response,253306,0,253331,"
+      <div class=""consent"">
+        <h2>Consent</h2>
+        <p>By answering the following questions, you are participating in a study being performed by
+        cognitive scientists in the Stanford Department of Psychology. If you have questions about
+        this research, please contact us at <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+        You must be at least 18 years old to participate. Your participation in this research is
+        voluntary. You may decline to answer any or all of the following questions. You may decline
+        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        the researchers who have requested your participation will not receive any personal
+        information about you.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-10,2,bfi,,survey,170721,"{""bfi"":{""bfi_01"":4,""bfi_02"":2,""bfi_03"":5,""bfi_04"":1,""bfi_05"":4,""bfi_06"":3,""bfi_07"":5,""bfi_08"":3,""bfi_09"":5,""bfi_10"":4,""bfi_11"":3,""bfi_12"":1,""bfi_13"":5,""bfi_14"":2,""bfi_15"":5,""bfi_16"":3,""bfi_17"":5,""bfi_18"":1,""bfi_19"":2,""bfi_20"":5,""bfi_21"":3,""bfi_22"":4,""attention_check"":2,""bfi_23"":1,""bfi_24"":1,""bfi_25"":4,""bfi_26"":3,""bfi_27"":3,""bfi_28"":2,""bfi_29"":1,""bfi_30"":4,""bfi_31"":3,""bfi_32"":4,""bfi_33"":4,""bfi_34"":5,""bfi_35"":2,""bfi_36"":5,""bfi_37"":1,""bfi_38"":3,""bfi_39"":1,""bfi_40"":4,""bfi_41"":4,""bfi_42"":5,""bfi_43"":2,""bfi_44"":3}}",424181,,4.0.0,castiello2026-pilot-d,live,,"{""bfi_01"":4,""bfi_02"":2,""bfi_03"":5,""bfi_04"":1,""bfi_05"":4,""bfi_06"":3,""bfi_07"":5,""bfi_08"":3,""bfi_09"":5,""bfi_10"":4,""bfi_11"":3,""bfi_12"":1,""bfi_13"":5,""bfi_14"":2,""bfi_15"":5,""bfi_16"":3,""bfi_17"":5,""bfi_18"":1,""bfi_19"":2,""bfi_20"":5,""bfi_21"":3,""bfi_22"":4,""bfi_23"":1,""bfi_24"":1,""bfi_25"":4,""bfi_26"":3,""bfi_27"":3,""bfi_28"":2,""bfi_29"":1,""bfi_30"":4,""bfi_31"":3,""bfi_32"":4,""bfi_33"":4,""bfi_34"":5,""bfi_35"":2,""bfi_36"":5,""bfi_37"":1,""bfi_38"":3,""bfi_39"":1,""bfi_40"":4,""bfi_41"":4,""bfi_42"":5,""bfi_43"":2,""bfi_44"":3}",0,2,true,"{""openness"":10,""conscientiousness"":9,""extraversion"":8,""agreeableness"":9,""neuroticism"":8}",3.9,2.1,4,2,3.375,2.625,4.444444444444445,1.5555555555555554,1.75,4.25,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-10,3,chat_setup,,chat-setup,,,424937,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,true,1,,,,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-10,4,instructions,,instructions,11224,,436169,,2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,"[{""page_index"":0,""viewing_time"":11224}]",,,,,,,,,,,,,,,,,,,,,,,,
+pilotD-10,5,chat_intro,,html-button-response,6782,0,442960,"<div class=""instructions"">
+        <h2>Your first chat</h2>
+        <p>You will now chat with <strong>Pat</strong>. Pat will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,,,,,,,,,,,,,,,,,,,,,,
+pilotD-10,6,chat,,live-chat,,,822098,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,1,inverse,Pat,24,12,12,747,0,0,0,complete,376817,24,,,,,,,,,,,
+pilotD-10,7,chat_intro,,html-button-response,2626,0,824735,"<div class=""instructions"">
+        <h2>Your second chat</h2>
+        <p>You will now chat with <strong>Alex</strong>. Alex will send the first message.</p>
+        <p>The chat ends after 24 messages in total
+        (12 from you). Please wait for each reply before writing again.</p>
+      </div>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,mirror,,,,,,,,,,,,,,,,,,,,,,
+pilotD-10,8,chat,,live-chat,,,1255069,,1.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,2,mirror,Alex,24,12,12,854,0,0,0,complete,430201,24,,,,,,,,,,,
+pilotD-10,9,affiliation,,survey,40936,"{""aff_similar"":{""chat2"":2,""chat1"":-2},""aff_enjoy"":{""chat2"":2,""chat1"":-2},""aff_distant"":{""chat1"":2,""chat2"":-2},""aff_understood"":{""chat2"":2,""chat1"":-1},""aff_different"":{""chat1"":2,""chat2"":2},""aff_chat_again"":{""chat2"":2,""chat1"":0},""aff_intro"":null}",1296121,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"{""chat1"":{""similar"":-2,""enjoy"":-2,""distant"":-2,""understood"":-1,""different"":-2,""chat_again"":0},""chat2"":{""similar"":2,""enjoy"":2,""distant"":2,""understood"":2,""different"":-2,""chat_again"":2}}",-1.5,1.3333333333333333,6,6,1.3333333333333333,-1.5,,,,
+pilotD-10,11,feedback,,survey,30270,,1335076,,4.0.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,true,86,false,0
+pilotD-10,12,debrief,,html-button-response,4027,0,1339111,"
+      <h2>Debrief</h2>
+      <p>Thank you for your participation! This study investigates if people have different feelings of connection towards AI chatbots whose conversational styles remind them of their own characteristics or contrasting ones.</p>
+      <p>The two chat partners are AI chatbots prompted with personality scores calculated from your answers to the personality survey. Your answers were used to influence the chatbot's conversational styles, there's no new model training based on it. We did not mention which chatbot corresponded to which personality profile in advance so that it won't influence your impression ratings, which will help us examine if and how people respond differently to the two profiles. </p>
+      <p>Your questionnaire answers, chat messages, and ratings were recorded for this research. Thank you for your time and contribution.</p>
+      <p>If you have questions about this research, contact
+      <a href=""mailto:stanfordpsych251@gmail.com"">stanfordpsych251@gmail.com</a>.
+      Press the button to save your responses and finish.</p>",2.1.0,castiello2026-pilot-d,live,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,

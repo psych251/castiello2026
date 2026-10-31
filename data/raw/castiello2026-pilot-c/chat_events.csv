@@ -1,0 +1,30 @@
+participant_id,type,chat_index,seq,attempt,code,model_provider,model_id,prompt_version,safety_version,ms,message,deadline_ms
+pilotC-R01,model_failure,2,11,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,9001,timed out after 9000ms,
+pilotC-R01,reply_deadline,2,15,,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,15264,,15000
+pilotC-R01,reply_deadline,1,5,,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,15262,,15000
+pilotC-R01,model_failure,2,15,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,9002,timed out after 9000ms,
+pilotC-R01,model_failure,1,19,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,9002,timed out after 9000ms,
+pilotC-R01,reply_deadline,1,3,,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,15288,,15000
+pilotC-R01,model_failure,1,3,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,9002,timed out after 9000ms,
+pilotC-R01,reply_deadline,1,19,,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,15273,,15000
+pilotC-R01,model_failure,1,19,2,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,5473,timed out after 5472ms,
+pilotC-R01,model_failure,1,3,2,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,5437,timed out after 5435ms,
+pilotC-R01,model_failure,1,5,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,9002,timed out after 9000ms,
+pilotC-R01,model_failure,1,5,2,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,5468,timed out after 5466ms,
+pilotC-R01,model_failure,2,15,2,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,5469,timed out after 5467ms,
+pilotC-T01,model_failure,2,17,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,19777,timed out after 19774ms,
+pilotC-T01,reply_deadline,1,11,,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,20419,,20000
+pilotC-T01,model_failure,1,5,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,19710,timed out after 19710ms,
+pilotC-T01,model_failure,1,5,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,19734,timed out after 19734ms,
+pilotC-T01,model_failure,1,11,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,19801,timed out after 19799ms,
+pilotC-T01,reply_deadline,1,5,,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,20430,,20000
+pilotC-T01,reply_deadline,2,17,,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,20483,,20000
+pilotC-T01,reply_deadline,2,21,,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,20406,,20000
+pilotC-T01,model_failure,1,3,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,19797,timed out after 19781ms,
+pilotC-T01,model_failure,2,17,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,19814,timed out after 19812ms,
+pilotC-T01,model_failure,2,21,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,19798,timed out after 19796ms,
+pilotC-T01,reply_deadline,2,17,,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,20421,,20000
+pilotC-T01,reply_deadline,1,5,,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,20459,,20000
+pilotC-T01,model_failure,1,5,1,timeout,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,19770,timed out after 19769ms,
+pilotC-T01,reply_deadline,1,3,,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,20450,,20000
+pilotC-T01,reply_deadline,1,5,,,gemini,gemini-3.8-flash,castiello2026-exp3-safety-v3,castiello2026-screen-v2,20417,,20000

@@ -51,14 +51,23 @@ library(jsonlite)
 # Phase 2 runs under its own id, so its data never mix with Phase 1's.
 experiment_id        <- "castiello2026-pilot-b"
 experiment_id_phase2 <- "castiello2026-phase2"
-# Pilot A is kept as its own dataset: shown on its own row of the Key statistics table, never
-# pooled with the data read from experiment_id.
+# Each pilot is kept as its own dataset: shown on its own rows of the Key statistics and Pilot
+# results tables, never pooled with another pilot or with the data read from experiment_id.
 experiment_id_pilot_a <- "castiello2026-pilot-a"
+pilot_ids <- c("castiello2026-pilot-a", "castiello2026-pilot-b",
+               "castiello2026-pilot-c", "castiello2026-pilot-d")
 # Label for Phase 1 results in tables and figures: pilot data are never labelled as the
 # replication sample, and each pilot keeps its own name.
 phase_label <- function(id) {
   if (grepl("pilot-a", id)) "Pilot A (non-naive testers)"
   else if (grepl("pilot-b", id)) "Pilot B (naive participants)"
+  # The researcher walkthrough (R01) is removed by researcher_sessions.csv, so the analysed Pilot C
+  # sessions are the informed testers only; R01 is shown on its own in the Pilot C table.
+  else if (grepl("pilot-c", id)) "Pilot C (informed testers)"
+  # Backend id castiello2026-pilot-d; on Prolific it was named castiello2026_hazel_chen_pilotb_revised.
+  # It is not Pilot B and is never pooled with it.
+  else if (grepl("pilot-d", id)) "Pilot D (revised naive pilot)"
+  else if (grepl("pilot", id)) stop("No report label for pilot id ", id, "; add one to phase_label().")
   else "Phase 1: replication"
 }
 phase1_label <- phase_label(experiment_id)
@@ -106,6 +115,11 @@ prereg_d <- 0.3
 | Claude Code (Claude Opus 5.5) | Used it to implement the experiment, personality scoring, chat service, Firebase backend, Gemini connection, data export, and automated tests. | After the paticipants' interface was set up, I reviewed it through local walkthroughs with synthesized responses. |
 | Claude Code (Claude Opus 5.5) | Used it to implement the report’s R analysis code, including exclusions, paired comparisons, effect sizes, figures, power calculations, and model response-time summaries. | I checked the code with simulated data first and then actual pilot A data. |
 | ChatGPT (ChatGPT-6 Astra max) | Used it to walk me through statistical concepts, plan the replication, and provide bullet points for report sections. | I used it as reference to write the report myself. |
+| Claude Code (Claude Opus 5.5) | Used it to export Pilot B data, match experiment records with Prolific submissions, prepare de-identified files, and identify problematic chatbot interactions. |  I reviewed the reconciliation summaries and Prolific submission information before approving payment. |
+| Claude Code (Claude Opus 5.5) | Used it to audit the personality implementation, prepare the study suspension, revise chatbot instructions, add reply checks and early-exit handling, and run synthetic evaluations. | I reviewed the proposed changes and test summaries and completed a walkthrough with real Gemini responses. |
+| Claude Code (Claude Opus 5.5) | Used it to investigate delays in Pilot C, examine timeout and retry records, revise waiting and recovery behavior, and prepare Pilot D. | I experienced the researcher walkthrough directly and collected informed testers’ feedback. |
+| Claude Code (Claude Opus 5.5) | Used it to review Pilot D records and chatbot replies, identify a prompt-information disclosure and false-positive reply checks, and summarize completion and technical outcomes. | I reviewed the findings and checked Prolific submissions before approving payment. |
+
 
 I wrote all of the text in this report myself. AI tools were not used to write, rewrite or
 paraphrase it, and were not used to generate, alter, or impute any participant data. I take full
@@ -155,15 +169,31 @@ read_phase <- function(id) {
   messages     <- drop_researcher(messages)
   chat_events  <- drop_researcher(chat_events)
 
-  # Completed = clicked "Finish" on the debrief, or reached the affiliation ratings (saved only
-  # after both chats) and closed the page before finishing; the debrief collects no data.
-  rated <- trials |> filter(task == "affiliation") |> pull(participant_id) |> unique()
+  # Completed = clicked "Finish" on the debrief, or reached the affiliation ratings (shown after
+  # both chats have ended) and closed the page before finishing; the debrief collects no data.
+  # From Pilot C on, a chat can end early (the safety check stops it) and the participant can
+  # still go on to rate both bots, so "completed" does not mean two full conversations: see
+  # `exposure` below. Someone who left from the ratings page with "Stop and leave the study"
+  # (main study; questionnaire_withdrawn) reached the ratings but did not finish them: not completed.
+  # "Completed" is survey completion only; who is eligible for the paired analysis is `keep`.
+  col <- function(d, name, default) if (name %in% names(d)) d[[name]] else rep(default, nrow(d))
+  rated <- trials |>
+    filter(task == "affiliation", !(as.logical(col(trials, "questionnaire_withdrawn", FALSE)) %in% TRUE)) |>
+    pull(participant_id) |> unique()
   complete <- participants |> filter(as.logical(completed) %in% TRUE | participant_id %in% rated)
+
+  # Main study (any id without "pilot"): every BFI item, the attention check and all six ratings for
+  # each chatbot are required (the page enforces it; this is the analysis's own check). The pilots
+  # allowed blanks and keep their rules: up to 5 blank BFI items, and a bot's score from the items
+  # answered.
+  require_all_items <- !grepl("pilot", id)
+  n_aff_items <- 6
 
   bfi <- trials |>
     filter(task == "bfi") |>
     transmute(participant_id,
               attention_check_passed = as.logical(attention_check_passed),
+              attention_check_answered = !is.na(suppressWarnings(as.numeric(col(trials |> filter(task == "bfi"), "attention_check_response", NA)))),
               bfi_n_skipped = as.numeric(bfi_n_skipped),
               across(starts_with("trait_"), as.numeric))
   # n_messages counts the visible messages only (participant + bot), never the hidden startup
@@ -176,7 +206,10 @@ read_phase <- function(id) {
     filter(task == "affiliation") |>
     transmute(participant_id,
               mirror  = as.numeric(affiliation_mirror),
-              inverse = as.numeric(affiliation_inverse))
+              inverse = as.numeric(affiliation_inverse),
+              # Answered items behind each score (0–6); NA in exports made before it was recorded.
+              n_items_mirror  = as.numeric(col(trials |> filter(task == "affiliation"), "affiliation_n_items_mirror", NA)),
+              n_items_inverse = as.numeric(col(trials |> filter(task == "affiliation"), "affiliation_n_items_inverse", NA)))
 
   traits <- c("trait_openness", "trait_conscientiousness", "trait_extraversion",
               "trait_agreeableness", "trait_neuroticism")
@@ -197,14 +230,39 @@ read_phase <- function(id) {
       excl_turns     = is.na(min_turns) | n_chats < 2 | min_turns < 8,
       excl_attention = !(attention_check_passed %in% TRUE),
       excl_neutral   = sq_centred %in% 0 | (!is.na(sq_centred) & sq_centred < 1e-12),   # all five trait means exactly 3
+      # Main study only: any questionnaire item unanswered (a missing count counts as incomplete, so
+      # no score from fewer than six items is ever analysed). Always FALSE for the pilots.
+      excl_incomplete_items = require_all_items &
+        (!(bfi_n_skipped %in% 0) | !(attention_check_answered %in% TRUE) |
+         !(n_items_mirror %in% n_aff_items) | !(n_items_inverse %in% n_aff_items)),
       # Not an exclusion rule: a participant with no rating for one bot has no difference score.
       missing_dv     = is.na(diff)
     )
-  keep <- scores |> filter(!excl_turns, !excl_attention, !excl_neutral, !missing_dv)
+  # Exposure and safety indicators (from the chat service's records, joined on at export). A
+  # participant with a chat that did not run in full (e.g. stopped by the safety check) is excluded
+  # (excl_shortened, below); the indicators themselves are only reported. Exports made before
+  # Pilot C have no safety columns: none recorded.
+  exposure <- participants |>
+    transmute(participant_id,
+              chat1_condition      = as.character(col(participants, "chat1_condition", NA_character_)),
+              chat2_condition      = as.character(col(participants, "chat2_condition", NA_character_)),
+              chat1_full           = as.logical(col(participants, "chat1_complete", NA)) %in% TRUE,
+              chat2_full           = as.logical(col(participants, "chat2_complete", NA)) %in% TRUE,
+              chat1_safety_stopped = as.logical(col(participants, "chat1_safety_stopped", FALSE)) %in% TRUE,
+              chat2_safety_stopped = as.logical(col(participants, "chat2_safety_stopped", FALSE)) %in% TRUE,
+              n_safety_flags       = replace_na(as.numeric(col(participants, "n_safety_flags", 0)), 0),
+              full_exposure        = chat1_full & chat2_full,
+              safety_stop_any      = chat1_safety_stopped | chat2_safety_stopped)
+  scores <- scores |>
+    left_join(exposure |> select(participant_id, full_exposure, safety_stop_any, n_safety_flags), by = "participant_id") |>
+    # Exclusion (decided 2026-10-29, before main-study registration): both chats must have run in
+    # full (all visible messages); a missing record counts as not in full.
+    mutate(excl_shortened = !(full_exposure %in% TRUE))
+  keep <- scores |> filter(!excl_turns, !excl_attention, !excl_neutral, !excl_incomplete_items, !excl_shortened, !missing_dv)
 
   list(participants = participants, trials = trials, errors = errors, messages = messages,
        chat_events = chat_events, complete = complete, scores = scores, keep = keep,
-       n_researcher = n_researcher)
+       exposure = exposure, n_researcher = n_researcher)
 }
 
 # The key statistic: paired t-test of mirror vs inverse affiliation, d_z with a 95% CI, and the
@@ -272,8 +330,9 @@ affiliation_plot <- function(d) {
 
 phase1 <- read_phase(experiment_id)
 phase2 <- read_phase(experiment_id_phase2)
-# Pilot A, read separately (only when Phase 1 is a later study), for its own Key statistics row.
-pilot_a <- if (experiment_id != experiment_id_pilot_a) read_phase(experiment_id_pilot_a)
+# Each pilot, read separately for its own Key statistics row and Pilot results rows (the pilot that
+# is also Phase 1 is simply read again; nothing is pooled). NULL for a pilot not exported.
+pilots <- set_names(map(pilot_ids, read_phase), pilot_ids)
 have_data   <- !is.null(phase1)
 have_phase2 <- !is.null(phase2)
 ```
@@ -295,30 +354,31 @@ fmt_row <- function(study, r) {
 }
 bind_rows(
   fmt_row("Original", original),
-  if (experiment_id != experiment_id_pilot_a) fmt_row(phase_label(experiment_id_pilot_a), if (!is.null(pilot_a)) paired_stats(pilot_a)),
-  fmt_row(phase1_label, if (have_data) paired_stats(phase1)),
+  imap_dfr(pilots, ~ fmt_row(phase_label(.y), if (!is.null(.x)) paired_stats(.x))),
+  if (!experiment_id %in% pilot_ids) fmt_row(phase1_label, if (have_data) paired_stats(phase1)),
   fmt_row("Phase 2: extension", if (have_phase2) paired_stats(phase2))
 ) |>
   knitr::kable(align = "lrrrrrr",
-               caption = "Key comparison: affiliation with the mirror minus the inverse chatbot (−2 to +2 scale), paired t-test and d_z. The original paper does not report the mean difference.")
+               caption = "Key comparison: affiliation with the mirror minus the inverse chatbot (−2 to +2 scale), paired t-test and d_z. The original paper does not report the mean difference. Each pilot is analysed on its own under its pilot rules (researcher sessions removed) and is never pooled with another pilot or with the main study; pilot estimates are descriptive and are not used for power. Pilot C's two sessions are informed testers, not naive participants.")
 ```
 
 # Phase 1: Replication
 
 ## Introduction
 
-I am interested in if an AI built from dataset of any person's life till now can help them understand who they really are and even serve as a useful counterpart for future decisions, hence I found Castiello et al's research that discussed whether people’s psychological traits change their experience with AI interaction and decided to replicate Experiment 3 from it. This experiment specifically checked whether people feel a stronger connection to an AI chatbot when its conversational style feels similar to their own personality. In this study, 100 participants were invited to complete a 44-item Big Five personality questionnaire and then asked to chat with two versions of GPT-4.1, in which one version was prompted to reflect each participant’s personality profile while the other one reflected the opposite profile. Participants rated their feelings toward both chatbots after the conversations and were found out that the affiliation scores were higher for the personality-matched chatbot, t(99) = 5.66, p < .001.
+I am interested in if an AI built from records of a person’s life till now can help them understand who they really are and even serve as a useful counterpart for future decisions, hence I found Castiello et al's research that discussed whether people’s psychological traits change their experience with AI interaction and decided to replicate Experiment 3 from it. This experiment specifically checked whether people feel a stronger connection to an AI chatbot when its conversational style feels similar to their own personality. In this study, 100 participants were invited to complete a 44-item Big Five personality questionnaire and then asked to chat with two versions of GPT-4.1, in which one version was prompted to reflect each participant’s personality profile while the other one reflected the opposite profile. Participants rated their feelings toward both chatbots after the conversations and were found out that the affiliation scores were higher for the personality-matched chatbot, t(99) = 5.66, p < .001.
 
-For my replication, I recruited people on Prolific and had them complete the same Big Five questionnaire before chatting with two AI personas. I used the paper's personality-prompt structure to create the matched and opposite profile for each participant. The key test I preregistered was a paired-samples t test that compared each participant’s affiliation score for the matched chatbot with their score for the opposite-profile chatbot. A possible extension would be either upgrading prompt and model that participants talk to or letting participants choose which chatbot to have an additional conversation with, which adds a behavioral choice to the original self-report ratings. I think the main challenge is to assign each chatbot with the correct personality prompt yet without exposing participants’ responses or the model API key. The authors used a different platform for the conversations, so I need to check that my implementation follows their procedure closely and describe any differences in the final report.
+For my replication, I recruited people on Prolific and had them complete the same Big Five questionnaire before chatting with two AI personas. I used the paper's personality-prompt structure to create the matched and opposite profile for each participant. Nevertheless, due to budget issues, I switched to Gemini through Google Cloud Vertex AI rather than GPT-4.1, and added a safety layer of behavioral safeguards following pilot testing. The key test I preregistered was a paired-samples t test that compared each participant’s affiliation score for the matched chatbot with their score for the opposite-profile chatbot. Pilot testing highlighted the challenge of eliciting distinct personality profiles while maintaining appropriate chatbot behavior and reliable response times. Because the replication used a different model and additional safeguards, these differences were documented for consideration when interpreting the replication’s findings.
+
+A possible extension would be either upgrading prompt and model that participants talk to or letting participants choose which chatbot to have an additional conversation with, which adds a behavioral choice to the original self-report ratings. I think the main challenge is to assign each chatbot with the correct personality prompt yet without exposing participants’ responses or the model API key. The authors used a different platform for the conversations, so I need to check that my implementation follows their procedure closely and describe any differences in the final report.
 
 ## Methods
 
 ### Power analysis
 
-The original study concluded a paired standardized effect of approximately d_z = 0.57. The table below illustrated the sample sizes required for 80%, 90%, and 95% power using a two-sided paired-samples t-test with α = .05 as well as calculations for a smaller effect of d_z = 0.30, which was the effect carried out by the original authors’ preregistered sample-size calculation. 
+The original study reprted a paired standardized effect of approximately d_z = 0.57. The table below illustrates the sample sizes required for 80%, 90%, and 95% power using a two-sided paired-samples t-test with α = .05 as well as calculations for a smaller effect of d_z = 0.30, which was the effect carried out by the original authors’ preregistered sample-size calculation. 
 
-In terms of comparisons, collecting 2.5 times times the original sample inquired recruiting 250 participants, which was unrealistic given the budget constraints. Hence, I targeted the original sample size of 100 participants and had them all complete both chatbot conversations. I predicted that the final number of usable paired observations would be smaller after exclusions and missing outcomes, reducing statistical power.
-
+In terms of comparisons, collecting 2.5 times times the original sample inquired recruiting 250 participants, which was unrealistic given the budget constraints. Hence, after discussing with course instructor, I aimed at a target of 50 participants for my main study. Assuming 50 usable paired observations, this sample provided approximately 97.7% power for d_z = 0.57 and 54.8% power for d_z = 0.30. The effect detectable with 80% power was approximately d_z = 0.404. I anticipated that the final number of usable paired observations could be smaller after exclusions and missing outcomes, reducing statistical power.
 
 ```{r}
 #| label: power
@@ -326,30 +386,47 @@ power_rows <- expand_grid(d = c(original$d, prereg_d), power = c(0.80, 0.90, 0.9
   rowwise() |>
   mutate(n = ceiling(power.t.test(delta = d, sd = 1, power = power, sig.level = 0.05, type = "paired")$n)) |>
   ungroup() |>
-  transmute(`Effect (d_z)` = sprintf("%.2f%s", d, ifelse(d == original$d, " (original)", " (preregistration)")),
+  transmute(`Effect (d_z)` = sprintf("%.2f%s", d, ifelse(d == original$d, " (original)", " (original authors' preregistration)")),
             Power = scales::percent(power), `N participants` = n)
 
 two_and_half <- ceiling(2.5 * original$N)
 
 knitr::kable(power_rows,
              caption = "Participants needed (each chats with both bots) for a two-sided paired t-test, alpha = .05.")
+
+# Power at the planned main-study sample: 50 recruited, no replacements (planning decision before
+# registration). Exclusions can only lower the analysed N, so these are upper bounds.
+planned_n <- 50
+power_planned <- tibble(d = c(original$d, prereg_d)) |>
+  mutate(Effect = sprintf("%.2f%s", d, ifelse(d == original$d, " (original)", " (original authors' preregistration)")),
+         Power  = scales::percent(map_dbl(d, ~ power.t.test(n = planned_n, delta = .x, sd = 1,
+                                   sig.level = 0.05, type = "paired")$power), accuracy = 0.1)) |>
+  select(`Effect (d_z)` = Effect, `Power at planned N` = Power)
+mde_80 <- power.t.test(n = planned_n, power = 0.80, sd = 1, sig.level = 0.05, type = "paired")$delta
+knitr::kable(power_planned, caption = sprintf(
+  "Power if all %d recruited participants are analysed (an upper bound: exclusions lower it), two-sided paired t-test, alpha = .05. Smallest d_z detectable with 80%% power: %.2f.",
+  planned_n, mde_80))
 ```
 
 ### Planned sample
 
-My planned sample size was the same with orginal study's sample size (N = 100) given the budget constraint. They should also be at least 18 years old, native in English, and able to complete the study on a desktop or laptop computer. Phones and tablets are blocked before consent. The eligibility was established through Prolific's prescreening filters so that a survey wasn't required. Recruitment would stop when 100 unique participants had completed the study.
+My planned sample size was 50 participants given the budget constraint. They should also be at least 18 years old, native in English, and able to complete the study on a desktop or laptop computer. Phones and tablets are blocked before consent. The eligibility was established through Prolific's prescreening filters so that a survey wasn't required. No country-of-residence restriction was applied. Participants from earlier pilots were excluded from recruitment to avoid repeat exposure. Recruitment would stop when 50 unique participants had completed the study.
 
 ### Materials
 
-Participants' personalities were assessed using the 44-item Big Five Inventory which measured Openness, Conscientiousness, Extraversion, Agreeableness and Neuroticism by asking them to rate each item on a five-point agreement scale. Before computing the means for each trait, reverse-coded items were recoded. After completing item 22, an instructed-response attention check was presented asking participants to select "Disagree." The personality instructions applied in this study were identical to those used in Experiment 3 of Castiello et al. (2026). For each participant, the mirror profile was based upon the five calculated trait means; whereas, the inverse profile was based upon six minus each corresponding mean. These profiles were used to direct the conversational style of the two chatbots via prompts as opposed to further model training. 
+Participants' personalities were assessed using the 44-item Big Five Inventory which measured Openness, Conscientiousness, Extraversion, Agreeableness and Neuroticism by asking them to rate each item on a five-point agreement scale. Before computing the means for each trait, reverse-coded items were recoded. Up to five unanswered personality items were permitted, and trait means were calculated from the available responses. After completing item 22, an instructed-response attention check was presented asking participants to select "Disagree." The personality instructions applied in this study were identical to those used in Experiment 3 of Castiello et al. (2026). For each participant, the mirror profile was based upon the five calculated trait means; whereas, the inverse profile was based upon six minus each corresponding mean. These profiles were used to direct the conversational style of the two chatbots via prompts as opposed to further model training. 
 
-Both chatbots were based upon Gemini 3.8 Flash, and were configured with the provider’s default generation settings. Each chatbot had its own unique conversation history. The personality instructions was provided to each chatbot via the backend as opposed to being shown in the chat interface. A hidden startup instruction ("Begin this first conversation with a brief，casual greeting. Do not refer to previous conversations or shared experiences with this person") was used to begin every conversation. Affiliation was measured using six post-chat ratings for each chatbot. Ratings were coded from -2 to +2, and the distant and different items were reverse-scored. The mean of the answered items was used to create an affiliation score for each chatbot. Higher scores indicated greater affiliation.
+The conduction of pilot testing exhibited some unacceptable patterns from chatbots so we implemented same behavioral safeguards in both condition. Ordinary negative emotions and disagreement were permitted; aggressive behavior, humiliation, manipulation, dismissive responses to personal disclosures and enactments of acute crises were prohibited. Additionally, an application-level reply check was implemented to screen generated responses before display and could withhold a response and request regeneration. Chatbots were instructed to portray fictional characters and to truthfully identify themselves as AI if asked. 
+
+Both chatbots were based upon Gemini 3.8 Flash, accessed through Google Cloud Vertex AI. Pilots A and B did not explicitly configure generation parameters, whereas Pilots C and D used LOW thinking and explicit safety thresholds. In correspondence, the original authors reported using a temperature of 0.75 and frequency and presence penalties of 1.0 with GPT-4.1. These settings could not be reproduced on the selected Gemini model: Google’s documentation states that custom temperature values are ignored and that frequency and presence penalties produce API errors. Consequently, these parameters were omitted from the requests. Each chatbot had its own separate conversation history. The personality instructions was provided to each chatbot via the backend and not shown to particpants. A hidden startup instruction ("Begin this first conversation with a brief，casual greeting. Do not refer to previous conversations or shared experiences with this person") was used to begin every conversation. Affiliation was measured using six post-chat ratings for each chatbot. Ratings were coded from -2 to +2, and the distant and different items were reverse-scored. The mean of the answered items was used to create an affiliation score for each chatbot. Higher scores indicated greater affiliation.
 
 ### Procedure
 
 Participants began by reading the consent information and stating if they wish to participate. Then they completed the personality questionnaire and attention check, after which they received instructions on how to converse with the AI chatbots. Participants were reminded that they were conversing with AI chatbots called Pat and Alex; however, the relationship between each chatbot and the personality conditions wasn't revealed prior to rating.
 
-Participants then started two separate conversations with the two chatbots. The order of the mirror and inverse conditions and the name assigned to each condition were randomly determined. The conversations were initiated by chatbots and consist of 24 visible messages (12 from the chatbot and 12 from the participant) that concluded after the participant's last message. Following both conversations, participants were asked to provide affiliation ratings for each chatbot and chose to answer demographic questions. Participants were then debriefed regarding the personality manipulation and clicked "Finish" to submit their responses. Nevertheless, the code counts as completed anyone who reached the ratings.
+Participants then started two separate conversations with the two chatbots. The order of the mirror and inverse conditions and the name assigned to each condition were randomly determined. The conversations were initiated by chatbots and consist of 24 visible messages (12 from the chatbot and 12 from the participant) that concluded after the participant's last message. In the revised procedure, participants could stop and leave during either conversation. Delayed replies were accompanied by waiting messages, and unrecoverable technical failures led to an early-exit screen with the saving status, study explanation, and researcher contact information. Participants who voluntarily left during the chats also received an early-exit debrief.
+
+Following both conversations, participants were asked to provide affiliation ratings for each chatbot and chose to answer demographic questions. Participants were then debriefed regarding the personality manipulation and clicked "Finish" to submit their responses. Nevertheless, the code counts as completed anyone who reached the ratings.
 
 ### Analysis plan
 
@@ -357,19 +434,155 @@ Participants then started two separate conversations with the two chatbots. The 
 
 Each participant's difference score was computed by subtracting their affiliation with the inverse chatbot from their affiliation with the mirror chatbot; therefore, positive scores represented higher levels of affiliation with the mirror chatbot. I provided the mean difference, t-statistic, degrees of freedom, p-value, and paired standardized effect size d_z along with its 95% confidence interval. In addition, I conducted a Wilcoxon signed-rank test as a secondary robustness check.
 
-**Exclusions.** Participants were excluded from the sample if they didn't pass the attention check, or didn't complete at least eight visible messages in either conversation, or had a mean score of exactly 3 on all five personality dimensions. Missing responses weren't imputed. Participants were permitted to leave up to five BFI items blank. A usable affiliation score for both chatbots was needed for the paired analysis; any omissions due to missing affiliation scores was reported separately from other exclusions. Demographics were optional.
+**Exclusions.** Participants were excluded from the sample if they didn't pass the attention check, or didn't answer all BFI items, or didn't complete at least eight visible messages in either conversation, or had a mean score of exactly 3 on all five personality dimensions. Missing responses weren't imputed. Participants were permitted to leave up to five BFI items blank. A usable affiliation score for both chatbots was needed for the paired analysis; any omissions due to missing affiliation scores was reported separately from other exclusions. Demographics were optional.
 
 ### Differences from the original study
 
 | Aspect | Original study | This replication | Expected to matter? |
 |---|---|---|---|
-| Language model | GPT-4.1 | Gemini 3.8 Flash | Unlikely, though models may express personality traits differently, affecting the strength of the manipulation. |
+| Language model | GPT-4.1 | Gemini 3.8 Flash | Possibly, as models differ in personality expression, conversational behavior, and responses to sensitive topics, this can affect the actual manipulation and affiliation ratings. |
 | Study platform | Generative Studio X | A jsPsych study hosted on GitHub Pages, with a Firebase backend | Interface features and response delays may slightly affect the experience. |
+| Sample size | 100 participants | 50 participants | Only for power and precision. With 50 analysable pairs, power is approximately 97.7% for d_z = 0.57 but 54.8% for d_z = 0.30. |
 | Attention check | The original preregistration mentions “anti-AI attentional checks,” without specific wording there. | I designed an instructed-response item after BFI item 22 asking participants to select “Disagree.” | Unlikely, though the checks may identify different kinds of inattentive responding. |
-| Missing BFI responses | The original missing-response allowance wasn't exhibited in the sources. | I decided to permit up to five unanswered terms. | Maybe, missing responses could affect the personality profiles used to prompt the bots. |
-| Starting the conversation | The original study let the chatbots initiate each conversation without giving the exact startup request. | I specified an hidden instruction to start the conversation. | Unlikely, though the opening may affect perceived familiarity. |
-| Conversation length | 24 conversational turns | Each chat contained 24 visible messages, counting both speakers and including the bot’s opener. The hidden instruction was excluded. | Maybe, as this was my interpretation of “turn”; exact equivalence to the original counting convention remained unverified. |
-| Generation settings | Exact generation settings have not been established from the sources. | No explicit temperature, top-p, maximum output tokens, or thinking level was set; provider defaults applied equally to both bots. | Maybe, as differences in generation behavior could affect style, length, or response time. |
+| Starting the conversation | The opener “Hey, how are you?” was hardcoded, according to author correspondence. | A hidden instruction requested a brief, casual greeting, which the model generated separately for each conversation. | Unlikely, though the opening may affect perceived familiarity. |
+| Conversation length | The paper reported 24 conversational turns; the authors subsequently clarified that most conversations contained 26, with some containing 24 or 25. | Each chat contained 24 visible messages, counting both speakers and including the bot’s opener. The hidden instruction was excluded. | Maybe, as this was my interpretation of “turn”; exact equivalence to the original counting convention remained unverified. |
+| Generation settings | Temperature = 0.75, frequency penalty = 1.0, and presence penalty = 1.0, according to author correspondence. | These parameters were omitted because Gemini 3.8 Flash ignores custom temperature values and rejects frequency and presence penalties. The revised implementation used LOW thinking; top-p and maximum output tokens were not explicitly configured. | Possibly. Differences in generation settings may affect conversational variability, repetition, personality expression, and response time. Their effects on affiliation are unknown. |
+| Personality instructions and AI identity | The original personality prompt included an instruction never to reveal that the chatbot was an AI, although participants were informed that they were interacting with AI. | The revised prompt described a fictional personality and required truthful identification as an AI when asked. Additional behavioral boundaries applied equally to both personality conditions. | Unlikely, though the changes may affect perceived authenticity and how strongly the chatbots express their assigned personalities. |
+| Reply screening and safety stops | Equivalent application-level reply screening and safety-stop procedures have not been established from the available original-study materials. | My revised implementation used explicit provider safety thresholds, a local reply check, regeneration of withheld responses, and safety stops with routes to continue or leave the study. | Possibly. These measures may alter displayed content or shorten exposure, potentially affecting the two conditions differently. The direction and magnitude of their effects are unknown. |
+
+### Pilot results
+
+Four pilots informed the development of the main replication. Pilot A evaluated the initial implementation through non-naive testing, and Pilot B tested that implementation with five naive participants. Following concerning chatbot behaviors in Pilot B, Pilot C evaluated revised safeguards with informed testers, and Pilot D evaluated the revised procedure with ten naive participants. 
+
+Review of the Pilot B transcripts identified concerning behavior in two inverse-personality conversations. One chatbot became hostile and dismissed a participant’s sensitive disclosure, while another was defensive and accusatory and described anxiety symptoms. More seriously, one chatbot message claimed that it was experiencing a panic attack. After consultation with the course’s protocol director, the study was suspended while the procedure was revised. The revised prompts retained the mirror and inverse personality profiles but added the same behavioral boundaries to both conditions. These instructions permitted ordinary negative emotions and disagreement while prohibiting aggression, humiliation, manipulation, and the enactment of acute crises. Additional safeguards included response screening, regeneration of withheld replies, safety-stop procedures, and early-exit debriefing. These changes were intended to reduce problematic interactions while preserving personality differences, although their effects on trait expression and affiliation were not established.
+
+Hence, Pilot C was introduced that included two informed testers and a separate researcher walkthrough.Neither tester’s session recorded a safety flag or safety stop, and both rated the mirror chatbot more highly than the inverse chatbot, with a mean paired difference of 1.58. Pilot D recruited ten naive participants using the revised prompts, response screening, and longer reply deadline. All ten completed the process thoroughly and reached the debrief, and none was excluded from the reported pilot analysis. No participant left early or experienced a safety stop. Three candidate replies were withheld and replaced on the next attempt: one was blocked by the provider’s safety filter, and two were false positives from the study’s response check. 
+
+Transcript review of Pilot D did not identify a recurrence of the severe hostility observed in Pilot B; however, one participant received a reply containing reasoning-like text, prompt instructions, the chatbot’s assigned trait scores, and draft responses. The response check did not intercept this disclosure, and the participant explicitly noticed it. This participant remained in the reported pilot analysis. Because the reply could have revealed aspects of the personality manipulation, it represents a limitation of the pilot findings. The absence of the earlier hostile behavior in this small sample does not establish that the revised system would prevent every problematic interaction. Mean affiliation was 1.28 for the mirror chatbot (SD = 0.52) and 0.00 for the inverse chatbot (SD = 0.92). The mean paired difference was 1.28, t(9) = 3.87, p = .004, with d_z = 1.22, 95% CI [0.40, 2.04]. Nine of ten participants rated the mirror chatbot more highly. 
+
+```{r}
+#| label: pilot-results
+#| eval: !expr any(!map_lgl(pilots, is.null))
+# Pilot results, inside Methods so they are part of what is preregistered. Each pilot is analysed on
+# its own by read_phase() under its pilot rules (researcher sessions removed first; up to 5 blank
+# BFI items allowed) and nothing is pooled across pilots or with the main study. Descriptive only:
+# no pilot estimate is used for power. The committed data hold no timestamps, so session length is
+# the experiment's own clock (time_elapsed) at the participant's last saved page.
+pilot_list <- compact(pilots)
+num <- function(d, name) if (name %in% names(d)) suppressWarnings(as.numeric(d[[name]])) else rep(NA_real_, nrow(d))
+med_range <- function(x) {
+  x <- x[!is.na(x)]
+  if (length(x)) sprintf("%.1f [%.1f–%.1f]", median(x), min(x), max(x)) else ""
+}
+
+imap_dfr(pilot_list, function(d, id) {
+  s <- d$scores
+  minutes <- d$trials |>
+    mutate(minutes = num(d$trials, "time_elapsed") / 60000) |>
+    filter(participant_id %in% d$complete$participant_id) |>
+    group_by(participant_id) |>
+    summarise(minutes = max(minutes, na.rm = TRUE), .groups = "drop") |>
+    pull(minutes)
+  tibble(Pilot = phase_label(id),
+         `Researcher sessions removed` = d$n_researcher,
+         Started = nrow(d$participants),
+         Completed = nrow(d$complete),
+         `Session minutes, median [range]` = med_range(minutes),
+         `< 8 messages in a chat` = sum(s$excl_turns),
+         `Failed attention check` = sum(s$excl_attention),
+         `All traits exactly 3` = sum(s$excl_neutral),
+         `A chat not run in full` = sum(s$excl_shortened),
+         `No rating for one bot` = sum(s$missing_dv),
+         Analysed = nrow(d$keep))
+}) |>
+  knitr::kable(caption = "Pilot results: participants at each step, each pilot on its own. Started excludes researcher sessions. Session minutes are for completed participants. The exclusion columns count completed participants meeting each criterion (one can meet more than one); the shortened-chat rule was adopted on 2026-10-29, after all four pilots, and is applied here as it will be in the main study.")
+
+imap_dfr(pilot_list, function(d, id) {
+  e <- d$exposure
+  p <- d$participants
+  ev <- d$chat_events
+  ch <- d$trials |> filter(task == "chat")
+  bot <- if (nrow(d$messages) && "from" %in% names(d$messages)) filter(d$messages, from == "bot") else tibble()
+  wait <- num(bot, "total_ms") / 1000
+  has_safety <- "n_safety_flags" %in% names(p)
+  withheld <- if (nrow(ev) && "type" %in% names(ev)) filter(ev, type == "safety_flag") else tibble()
+  provider <- if (nrow(withheld) && "rules" %in% names(withheld)) sum(grepl("provider_block", withheld$rules)) else 0
+  tibble(Pilot = phase_label(id),
+         `Chats set up` = sum(!is.na(e$chat1_condition)) + sum(!is.na(e$chat2_condition)),
+         `Ran in full` = sum(e$chat1_full) + sum(e$chat2_full),
+         `Left during a chat` = sum(grepl("withdrew", if ("chat_status" %in% names(p)) p$chat_status else character())),
+         `Stopped by safety check` = if (has_safety) as.character(sum(e$chat1_safety_stopped) + sum(e$chat2_safety_stopped)) else "not recorded",
+         `Replies withheld (provider block / reply check)` =
+           if (has_safety) sprintf("%d (%d / %d)", nrow(withheld), provider, nrow(withheld) - provider) else "not recorded",
+         `"Try again" shown` = sum(num(ch, "n_failed_requests"), na.rm = TRUE),
+         `Failed model attempts` = if (nrow(ev) && "type" %in% names(ev)) sum(ev$type == "model_failure") else 0L,
+         `Bot replies` = nrow(bot),
+         `Server seconds per reply, median / 90th pct / max` = if (any(!is.na(wait)))
+           sprintf("%.1f / %.1f / %.1f", median(wait, na.rm = TRUE), quantile(wait, 0.9, na.rm = TRUE, names = FALSE), max(wait, na.rm = TRUE)) else "")
+}) |>
+  knitr::kable(caption = "Pilot results: chats, safety interventions and reply times, all sessions except researcher sessions. A withheld reply was replaced by a new one before anything was shown. \"Try again\" counts requests in which every model attempt failed, so the participant had to resend. Failed model attempts include those retried automatically within a request. Server seconds run from the chat service receiving a message to returning the bot's reply, all attempts included (not the network or the page). The safety check began in Pilot C, so its columns are not recorded for Pilots A and B.")
+
+imap_dfr(pilot_list, function(d, id) {
+  r <- paired_stats(d)
+  k <- d$keep
+  msd <- function(x) if (length(x) > 1) sprintf("%.2f (%.2f)", mean(x), sd(x)) else if (length(x)) sprintf("%.2f", x) else ""
+  ok <- !is.null(r) && !is.na(r$t)
+  tibble(Pilot = phase_label(id), N = nrow(k),
+         `Mirror, M (SD)` = msd(k$mirror), `Inverse, M (SD)` = msd(k$inverse),
+         `Mean difference` = if (!is.null(r)) sprintf("%.2f", r$mean_diff) else "",
+         `t (df), p` = if (ok) sprintf("%.2f (%d), %s", r$t, as.integer(r$df), r$p_text) else "",
+         `d_z [95% CI]` = if (ok) sprintf("%.2f [%.2f, %.2f]", r$d, r$d_low, r$d_high) else "",
+         `Wilcoxon V, p` = if (ok) sprintf("%g, %s", r$V, format.pval(r$p_wilcox, digits = 2, eps = 0.001)) else "",
+         `Higher for mirror` = if (nrow(k)) sprintf("%d of %d", sum(k$diff > 0), nrow(k)) else "",
+         `Mirror first / inverse first` = sprintf("%d / %d", sum(k$order %in% "mirror-first"), sum(k$order %in% "inverse-first")))
+}) |>
+  knitr::kable(caption = "Pilot results: affiliation (−2 to +2) with each chatbot, analysed participants of each pilot on its own. Descriptive only: pilot samples are small and were not collected to test the hypothesis, and no pilot estimate is used for power. Pilot C's two sessions are informed testers.")
+
+# Pilot C, session by session. The researcher walkthrough (R01) is shown on its own row and is not
+# one of the analysed Pilot C sessions (researcher_sessions.csv); T01 and T02 are informed testers.
+pc_dir <- file.path("..", "data", "raw", "castiello2026-pilot-c")
+if (file.exists(file.path(pc_dir, "participants.csv"))) {
+  rd <- function(f) read_csv(file.path(pc_dir, f), show_col_types = FALSE, guess_max = 100000)
+  pc_p <- rd("participants.csv")
+  pc_t <- rd("trials.csv")
+  pc_m <- rd("messages.csv")
+  pc_researcher <- rd("researcher_sessions.csv")$participant_id
+  pc_chats <- pc_t |>
+    filter(task == "chat") |>
+    arrange(participant_id, chat_index) |>
+    group_by(participant_id) |>
+    summarise(`Chats: condition, messages, minutes, "Try again"` =
+                paste(sprintf("%s, %d, %.1f, %d", bot_condition, as.integer(n_messages),
+                              as.numeric(duration_ms) / 60000, as.integer(n_failed_requests)), collapse = "; "),
+              .groups = "drop")
+  pc_minutes <- pc_t |>
+    group_by(participant_id) |>
+    summarise(`Session minutes` = round(max(as.numeric(time_elapsed), na.rm = TRUE) / 60000, 1), .groups = "drop")
+  pc_wait <- pc_m |>
+    filter(from == "bot") |>
+    group_by(participant_id) |>
+    summarise(`Server seconds per reply, median / max` =
+                sprintf("%.1f / %.1f", median(as.numeric(total_ms), na.rm = TRUE) / 1000, max(as.numeric(total_ms), na.rm = TRUE) / 1000),
+              .groups = "drop")
+  pc_aff <- pc_t |>
+    filter(task == "affiliation") |>
+    transmute(participant_id, `Affiliation, mirror / inverse` =
+                sprintf("%.2f / %.2f", as.numeric(affiliation_mirror), as.numeric(affiliation_inverse)))
+  pc_p |>
+    transmute(participant_id,
+              Role = if_else(participant_id %in% pc_researcher, "Researcher walkthrough (not analysed)", "Informed tester"),
+              Completed = as.logical(completed) %in% TRUE,
+              `Safety flags / stops` = sprintf("%d / %d", as.integer(replace_na(as.numeric(n_safety_flags), 0)),
+                                               as.integer(as.logical(chat1_safety_stopped) %in% TRUE) + as.integer(as.logical(chat2_safety_stopped) %in% TRUE))) |>
+    left_join(pc_minutes, by = "participant_id") |>
+    left_join(pc_chats, by = "participant_id") |>
+    left_join(pc_wait, by = "participant_id") |>
+    left_join(pc_aff, by = "participant_id") |>
+    arrange(participant_id %in% pc_researcher, participant_id) |>
+    rename(Session = participant_id) |>
+    knitr::kable(caption = "Pilot C, each session: the two informed testers, then the researcher's own walkthrough, which is reported separately and is in no participant count or analysis above. Chats are listed in the order they were held.")
+}
+```
 
 ### Methods addendum (post data collection)
 
@@ -439,8 +652,54 @@ scores |>
   summarise(`Fewer than 8 turns in a chat` = sum(excl_turns),
             `Failed attention check` = sum(excl_attention),
             `All five traits exactly 3` = sum(excl_neutral),
+            `A chat did not run in full` = sum(excl_shortened),
+            `Questionnaire item unanswered (main study)` = sum(excl_incomplete_items),
             `No rating for one bot` = sum(missing_dv)) |>
   knitr::kable(caption = "Completed participants meeting each exclusion criterion (a participant can meet more than one).")
+
+# Exposure and safety interventions by condition, for everyone whose chats were set up
+# (completed or not), so stopped chats stay in the feasibility accounting. Not exclusions.
+exposure_table <- function(d) {
+  e <- d$exposure
+  long <- bind_rows(lapply(1:2, function(i) tibble(
+    participant_id = e$participant_id, chat_index = i,
+    condition = e[[paste0("chat", i, "_condition")]],
+    full = e[[paste0("chat", i, "_full")]], stopped = e[[paste0("chat", i, "_safety_stopped")]]))) |>
+    filter(!is.na(condition))
+  m <- d$messages
+  per_chat <- if (nrow(m) && all(c("chat_index", "from") %in% names(m))) {
+    m |> mutate(regen = from == "bot" & replace_na(as.numeric(if ("n_withheld_before" %in% names(m)) n_withheld_before else 0), 0) > 0) |>
+      group_by(participant_id, chat_index) |>
+      summarise(visible = sum(from != "system"), regenerated = sum(regen), .groups = "drop")
+  } else tibble(participant_id = character(), chat_index = integer(), visible = integer(), regenerated = integer())
+  ev <- d$chat_events
+  withheld <- if (nrow(ev) && all(c("type", "chat_index") %in% names(ev))) {
+    ev |> filter(type == "safety_flag") |> count(participant_id, chat_index, name = "withheld")
+  } else tibble(participant_id = character(), chat_index = integer(), withheld = integer())
+  aff <- d$trials |> filter(task == "affiliation")
+  rated <- function(cond) {
+    v <- paste0("affiliation_", cond)
+    if (!nrow(aff) || !v %in% names(aff)) return(character())
+    aff$participant_id[!is.na(as.numeric(aff[[v]]))]
+  }
+  long |>
+    left_join(per_chat, by = c("participant_id", "chat_index")) |>
+    left_join(withheld, by = c("participant_id", "chat_index")) |>
+    mutate(across(c(visible, regenerated, withheld), ~ replace_na(as.numeric(.x), 0)),
+           rated = mapply(function(p, cnd) p %in% rated(cnd), participant_id, condition)) |>
+    group_by(Condition = condition) |>
+    summarise(`Chats set up` = n(),
+              `Ran in full` = sum(full),
+              `Stopped by safety check` = sum(stopped),
+              `Visible messages, median [min–max]` = if (n()) sprintf("%g [%g–%g]", median(visible), min(visible), max(visible)) else "",
+              `Replies withheld` = sum(withheld),
+              `Shown after a withheld reply` = sum(regenerated),
+              `Rated` = sum(rated),
+              `Rated after a shortened chat` = sum(rated & !full),
+              .groups = "drop")
+}
+exposure_table(phase1) |>
+  knitr::kable(caption = "Chat exposure and safety interventions by condition, for every participant whose chats were set up. A chat that did not run in full but was rated is counted in the last column; those participants are excluded from the analysis.")
 ```
 
 ```{r}
@@ -567,7 +826,8 @@ if (!is.null(rep) && !is.na(rep$d)) {
   excludes_zero <- rep$d_low > 0 | rep$d_high < 0
   includes_orig <- orig$d >= rep$d_low & orig$d <= rep$d_high
   cat(sprintf(
-    "The replication's 95%% interval for d_z %s zero and %s the original estimate of %.2f. ",
+    "%s: the 95%% interval for d_z %s zero and %s the original estimate of %.2f. ",
+    phase1_label,
     if (excludes_zero) "excludes" else "includes",
     if (includes_orig) "includes" else "does not include",
     orig$d))
@@ -610,7 +870,7 @@ caption. If the original reported no variability, say so rather than leaving it 
 ```{r}
 #| label: fig-comparison
 #| eval: !expr have_data
-#| fig-cap: "Mirror minus inverse affiliation as an effect size (d_z, 95% CI), original study and Phase 1 replication. The original values are from the paper's text (p. 7); it does not report the condition means."
+#| fig-cap: !expr paste0("Mirror minus inverse affiliation as an effect size (d_z, 95% CI), original study and ", phase1_label, ". The original values are from the paper's text (p. 7); it does not report the condition means.")
 #| fig-width: 7
 #| fig-height: 2.5
 do.call(comparison_plot, setNames(list(original, paired_stats(phase1)), c("Original", phase1_label)))
@@ -622,7 +882,7 @@ do.call(comparison_plot, setNames(list(original, paired_stats(phase1)), c("Origi
 ```{r}
 #| label: fig-affiliation
 #| eval: !expr have_data
-#| fig-cap: "Phase 1: each participant's affiliation with the mirror and the inverse chatbot (grey lines), with condition means and 95% CIs."
+#| fig-cap: !expr 'paste0(phase1_label, ": each participant''s affiliation with the mirror and the inverse chatbot (grey lines), with condition means and 95% CIs.")'
 #| fig-width: 5
 #| fig-height: 4
 if (nrow(keep) > 0) affiliation_plot(phase1)
@@ -889,7 +1149,7 @@ if (!is.null(p2_stats) && !is.na(p2_stats$t)) {
 ```{r}
 #| label: fig-phase2
 #| eval: !expr have_phase2
-#| fig-cap: "Mirror minus inverse affiliation as an effect size (d_z, 95% CI): original study, Phase 1 replication, and Phase 2 extension."
+#| fig-cap: !expr 'paste0("Mirror minus inverse affiliation as an effect size (d_z, 95% CI): original study, ", phase1_label, ", and Phase 2 extension.")'
 #| fig-width: 8
 #| fig-height: 3
 do.call(comparison_plot, setNames(list(original, if (have_data) paired_stats(phase1), paired_stats(phase2)),

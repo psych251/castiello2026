@@ -33,11 +33,11 @@ window.TEMPLATE_VERSION = "0.1.0";
 const EXPERIMENT = {
   // Firestore path: experiments/<id>/participants/... Change it for each phase so pilot and
   // real data never mix. Must match experiment_id in writeup/replication-report.qmd.
-  // Pilot D (2026-10-29): the second naive Prolific pilot, with Pilot C's revised prompt and
-  // safeguards. Earlier ids keep their records and are never pooled with it: Pilot B
-  // ("castiello2026-pilot-b", naive Prolific) and Pilot C ("castiello2026-pilot-c", the researcher
-  // and informed testers).
-  id: "castiello2026-pilot-d",
+  // The main replication (planned 2026-10-29; 50 recruited; not yet registered or launched). Every
+  // pilot keeps its own id and records and is never pooled with it: Pilot B ("castiello2026-pilot-b",
+  // naive Prolific), Pilot C ("castiello2026-pilot-c", the researcher and informed testers) and
+  // Pilot D ("castiello2026-pilot-d", the revised naive Prolific pilot, which ran as commit 9449b20).
+  id: "castiello2026-main",
 
   // Trials per Firestore write. 1 = save every trial the moment it finishes. This study has
   // only about ten trials, so 1 is well inside the free tier.
@@ -49,7 +49,7 @@ const EXPERIMENT = {
   // Prolific: participants who finish are redirected to Prolific with this completion code. SET
   // BEFORE LAUNCH from the new Prolific study (not Pilot B's code). Until it is set, together with
   // prolific.study_id, the published page does not open.
-  prolific_completion_code: "C15R004P", // the Pilot D draft's code (kept from Pilot B, which it duplicates)
+  prolific_completion_code: null, // set from the main study's Prolific draft (Pilot D used C15R004P)
 
   // Prolific access (Pilot D). The page needs Prolific's PROLIFIC_PID, STUDY_ID and SESSION_ID in
   // its address, and STUDY_ID must be study_id, before it signs in or saves anything; the chat
@@ -59,7 +59,7 @@ const EXPERIMENT = {
   // the researchers on Prolific instead). Kinds: technical_failure (the chat could not continue),
   // left_after_safety_stop, withdrew, paused.
   prolific: {
-    study_id: "6ae2c1c891a6603199aad8fc", // the Pilot D draft (app.prolific.com/researcher/workspaces/studies/6ae2c1c891a6603199aad8fc)
+    study_id: null, // the main study's Prolific study id (Pilot D's was 6ae2c1c891a6603199aad8fc)
     early_exit_codes: { technical_failure: null, left_after_safety_stop: null, withdrew: null, paused: null },
   },
 
@@ -83,8 +83,15 @@ const EXPERIMENT = {
   chat_endpoint: "https://us-central1-castiello2026-replication.cloudfunctions.net/chat",
 
   // BFI-44: how many of the 44 items a participant may leave blank and still continue
-  // (must match max_bfi_skips in server/config.js).
+  // (must match max_bfi_skips in server/config.js). Used only when require_all_items is false.
   max_bfi_skips: 5,
+
+  // Main study: every BFI item, the attention check (any answer; the correct one is not
+  // required or shown) and all twelve affiliation ratings (six per chatbot) must be answered to
+  // continue, as in the original study. "Stop and leave the study" on those pages bypasses the
+  // check, saves what was answered and ends with the early-exit debrief. Must match
+  // require_all_items for this id in server/config.js. The pilots ran with this false.
+  require_all_items: true,
 
   // Two optional free-text questions after demographics, added for Pilot B: what participants
   // understood the task to be, and anything they found confusing. Not affiliation items and not
@@ -252,7 +259,8 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
         || jsPsych.data.get().filter({ task: "chat_setup", setup_ok: false }).count() > 0;
       const chatFailed = jsPsych.data.get().filter({ task: "chat", ended_reason: "failed" }).count() > 0;
       const leftAfterStop = jsPsych.data.get().filter({ task: "chat", ended_reason: "withdrew_after_safety_stop" }).count() > 0;
-      const withdrew = leftAfterStop || jsPsych.data.get().filter({ task: "chat", ended_reason: "withdrew" }).count() > 0;
+      const withdrew = leftAfterStop || jsPsych.data.get().filter({ task: "chat", ended_reason: "withdrew" }).count() > 0
+        || jsPsych.data.get().filter({ questionnaire_withdrawn: true }).count() > 0;
       const paused = jsPsych.data.get().filter({ task: "chat", ended_reason: "paused" }).count() > 0;
       // A study that stopped early is saved as not completed, so it can never be counted as a
       // finished session. A chat ended by the safety check is not an early end when the
@@ -340,8 +348,29 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
     status: (chatIndex, seq) => client.status(chatIndex, seq),
   };
 
+  // Main study (require_all_items): a questionnaire page that requires every answer still lets the
+  // participant leave. "Stop and leave the study", then "Yes, leave the study", ends the study
+  // without the answer check: what they answered on the page is saved with this trial
+  // (questionnaire_withdrawn, withdrawn_from), and the early-exit debrief is shown as for a
+  // withdrawal from a chat (ended_early "withdrew").
+  function offerWithdrawal(survey, page) {
+    const note = survey.pages[0].addNewQuestion("html", "withdraw_note");
+    note.html = "<p class='questionnaire-withdraw-confirm'>Leave the study now? The answers you have given so far are saved.</p>";
+    note.visible = false;
+    let ask, yes, no;
+    const confirming = (on) => { note.visible = on; ask.visible = !on; yes.visible = on; no.visible = on; };
+    ask = survey.addNavigationItem({ id: "withdraw", title: "Stop and leave the study", action: () => confirming(true) });
+    yes = survey.addNavigationItem({ id: "withdraw_yes", title: "Yes, leave the study", visible: false,
+      action: () => jsPsych.abortExperiment(undefined, { task: page, questionnaire_withdrawn: true, withdrawn_from: page, response: survey.data }) });
+    no = survey.addNavigationItem({ id: "withdraw_no", title: "Keep going", visible: false, action: () => confirming(false) });
+  }
+
   // -------------------------------------------------------------------------
   // 1. Consent (course-wide IRB text; edit only the contact address)
+  // OPEN BEFORE MAIN-STUDY LAUNCH (2026-10-29): this text says participants "may decline to answer
+  // any or all of the following questions", but with require_all_items the questionnaire pages
+  // need every answer to continue (leaving stays possible at any time). Replacement wording is
+  // with the protocol director for review; the text below is unchanged until it is approved.
   // -------------------------------------------------------------------------
   const consent = {
     type: jsPsychHtmlButtonResponse,
@@ -379,7 +408,7 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
   };
 
   // -------------------------------------------------------------------------
-  // 2. BFI-44 (one page; up to max_bfi_skips items may be left blank)
+  // 2. BFI-44 (one page; up to max_bfi_skips items may be left blank, none when require_all_items)
   // -------------------------------------------------------------------------
   const bfiRows = [];
   for (const item of C.BFI_ITEMS) {
@@ -398,21 +427,35 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
           name: "bfi",
           title: C.BFI_STEM,
           description: "Here are a number of characteristics that may or may not apply to you. Please indicate " +
-            "the extent to which you agree or disagree with each statement. You may leave up to " +
-            EXPERIMENT.max_bfi_skips + " statements blank.",
+            "the extent to which you agree or disagree with each statement. " + (EXPERIMENT.require_all_items
+            ? "Please answer every statement."
+            : "You may leave up to " + EXPERIMENT.max_bfi_skips + " statements blank."),
           columns: C.BFI_SCALE,
           columnMinWidth: "88px",
           rowTitleWidth: "34%",
           rows: bfiRows,
           alternateRows: true,
+          // Every row, the attention check included, must have an answer; unanswered rows are
+          // highlighted and the answers already given stay.
+          isRequired: EXPERIMENT.require_all_items,
+          isAllRowRequired: EXPERIMENT.require_all_items,
         }],
       }],
     },
     survey_function: (survey) => {
       window.__survey = survey; // lets the automated test fill the page quickly
+      if (EXPERIMENT.require_all_items) offerWithdrawal(survey, "bfi");
       survey.onValidateQuestion.add((sender, options) => {
         if (options.name !== "bfi") return;
         const v = options.value || {};
+        if (EXPERIMENT.require_all_items) {
+          const blank = bfiRows.filter((r) => v[r.value] === undefined || v[r.value] === null || v[r.value] === "").length;
+          if (blank > 0) {
+            options.error = (blank === 1 ? "1 statement has" : blank + " statements have") +
+              " not been answered yet. They are highlighted below; please answer every statement to continue.";
+          }
+          return;
+        }
         const blank = C.BFI_ITEMS.filter((i) => v[i.id] === undefined || v[i.id] === null).length;
         if (blank > EXPERIMENT.max_bfi_skips) {
           options.error = "You have left " + blank + " statements blank. You may leave at most " +
@@ -424,10 +467,12 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
     on_finish: (data) => {
       // Scoring happens on the chat service, so the five scores never reach this page.
       const answers = (data.response || {}).bfi || {};
+      if (data.questionnaire_withdrawn) return; // left from this page: see offerWithdrawal
       data.bfi_raw = {};
       for (const item of C.BFI_ITEMS) data.bfi_raw[item.id] = answers[item.id] === undefined ? null : answers[item.id];
       data.bfi_n_skipped = Object.values(data.bfi_raw).filter((x) => x === null).length;
       data.attention_check_response = answers[C.ATTENTION_CHECK.id] === undefined ? null : answers[C.ATTENTION_CHECK.id];
+      data.bfi_required_all = EXPERIMENT.require_all_items;
       saver.updateParticipant({ bfi_done: true });
     },
   };
@@ -544,10 +589,16 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
           columnMinWidth: "88px",
           rowTitleWidth: "18%",
           rows: [{ value: "chat1", text: "BOT1" }, { value: "chat2", text: "BOT2" }],
+          // Main study: both chatbots' rows of every item (12 answers); 0 and negative values count.
+          isRequired: EXPERIMENT.require_all_items,
+          isAllRowRequired: EXPERIMENT.require_all_items,
         }))),
       }],
     },
-    survey_function: (survey) => { window.__survey = survey; },
+    survey_function: (survey) => {
+      window.__survey = survey;
+      if (EXPERIMENT.require_all_items) offerWithdrawal(survey, "affiliation");
+    },
     // The bot names are known only once the chat service has assigned them.
     on_start: (trial) => {
       trial.survey_json = JSON.parse(JSON.stringify(trial.survey_json)
@@ -558,13 +609,19 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
       // One mean per chat. Which chat was the mirror is joined on at export, so
       // affiliation_mirror / affiliation_inverse appear in trials.csv as before.
       const s = C.scoreAffiliation(data.response, { chat1: "chat1", chat2: "chat2" });
+      // Main study: a score only from all six items (fewer happens only when someone leaves from
+      // this page); the answered count is always kept. The pilots averaged whatever was answered.
+      const n = C.AFFILIATION_ITEMS.length;
+      const full = (chat) => !EXPERIMENT.require_all_items || s["n_items_" + chat] === n;
       Object.assign(data, {
         affiliation_coded: s.coded,
-        affiliation_chat1: s.affiliation_chat1,
-        affiliation_chat2: s.affiliation_chat2,
+        affiliation_chat1: full("chat1") ? s.affiliation_chat1 : null,
+        affiliation_chat2: full("chat2") ? s.affiliation_chat2 : null,
         affiliation_n_items_chat1: s.n_items_chat1,
         affiliation_n_items_chat2: s.n_items_chat2,
+        affiliation_required_all: EXPERIMENT.require_all_items,
       });
+      if (data.questionnaire_withdrawn) return; // left from this page: see offerWithdrawal
       saver.updateParticipant({ chat_status: "done" });
     },
   };

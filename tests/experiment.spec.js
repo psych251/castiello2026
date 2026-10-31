@@ -18,7 +18,7 @@ const Castiello = require("../server/castiello.js");
 
 const EMULATOR = process.env.EMULATOR === "1" || !!process.env.FIRESTORE_EMULATOR_HOST;
 const PROJECT = "demo-psych251";
-const EXPERIMENT_ID = "castiello2026-pilot-d";
+const EXPERIMENT_ID = "castiello2026-main";
 // Pilot C is invite-only. The suite's own invite (made in beforeAll, emulator only) has plenty of uses.
 const TEST_INVITE = "test-invite-" + Math.random().toString(36).slice(2, 12);
 const sha256 = (x) => require("crypto").createHash("sha256").update(x).digest("hex");
@@ -43,8 +43,9 @@ const KEY = {
 };
 const id = (n) => "bfi_" + String(n).padStart(2, "0");
 
-// A varied answer pattern with items 3 and 40 left blank (2 of the 5 allowed skips).
-function bfiAnswers(blank = [3, 40]) {
+// A varied answer pattern. The main study requires every item, so by default none is blank;
+// tests of missing answers pass the item numbers to leave blank.
+function bfiAnswers(blank = []) {
   const a = {};
   for (let n = 1; n <= 44; n++) if (!blank.includes(n)) a[id(n)] = ((n * 7) % 5) + 1;
   a.attention_check = 2; // "Disagree": passes
@@ -80,9 +81,10 @@ const AFF = {
 
 // Every page load points at the test chat service, and skips the suspension (EXPERIMENT.suspended
 // and server/config.js `suspended`), which only test runs in the emulators may do.
-// Pilot D needs Prolific's three parameters; each page load gets a fresh Prolific ID unless the
-// test gives one (the service allows two sessions per Prolific ID).
-const prolificQs = () => "PROLIFIC_PID=p" + Math.random().toString(36).slice(2, 12) + "&STUDY_ID=6ae2c1c891a6603199aad8fc&SESSION_ID=s" + Math.random().toString(36).slice(2, 8);
+// The main study needs Prolific's three parameters; each page load gets a fresh Prolific ID unless
+// the test gives one (the service allows two sessions per Prolific ID). Its Prolific study id is not
+// set yet, which only the emulators allow, so any STUDY_ID is accepted here.
+const prolificQs = () => "PROLIFIC_PID=p" + Math.random().toString(36).slice(2, 12) + "&STUDY_ID=TESTSTUDY&SESSION_ID=s" + Math.random().toString(36).slice(2, 8);
 const url = (qs = "") => {
   const add = prolificQs().split("&").filter((kv) => !new RegExp("(^|&)" + kv.split("=")[0] + "=").test(qs)); // only what qs lacks
   return "/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&" + add.join("&") + (qs ? "&" + qs : "");
@@ -294,9 +296,9 @@ test.describe("experiment", () => {
     const s = await sessionOf(docId);
     expect(s).toMatchObject({ order: "mirror-first", mirror_name: "Pat", inverse_name: "Alex",
       chat1_name: "Pat", chat1_condition: "mirror", chat2_name: "Alex", chat2_condition: "inverse",
-      attention_check_passed: true, bfi_n_skipped: 2, study_phase: "pilot-d", model_provider: "fake", messages_per_chat: 24,
+      attention_check_passed: true, bfi_n_skipped: 0, require_all_items: true, study_phase: "main", model_provider: "fake", messages_per_chat: 24,
       prompt_version: "castiello2026-exp3-safety-v3", safety_version: "castiello2026-screen-v2", invite_label: null, n_safety_flags: 0,
-      prolific_study_id: "6ae2c1c891a6603199aad8fc", prolific_pid_hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
+      prolific_study_id: "TESTSTUDY", prolific_pid_hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
     expect(JSON.stringify(s)).not.toContain("PROLIFICMARKER"); // the service keeps only a hash
     // The revised prompt: the paper's text (identity clause reworded), then the boundaries, the same for both bots.
     for (const k of ["chat1_prompt", "chat2_prompt"]) {
@@ -333,7 +335,7 @@ test.describe("experiment", () => {
     // Trial rows: counts, no text, no condition.
     const trials = await trialsOf(docId);
     expect([...new Set(trials.map((t) => t.participant_id))]).toEqual([docId]);
-    expect(trials.find((t) => t.task === "bfi").bfi_raw.bfi_03).toBe(null); // never imputed
+    expect(Object.values(trials.find((t) => t.task === "bfi").bfi_raw).filter((v) => v === null)).toEqual([]); // all 44 answered
     expect(trials.find((t) => t.task === "chat_setup").setup_ok).toBe(true);
     const chats = trials.filter((t) => t.task === "chat");
     expect(chats.map((c) => [c.chat_index, c.bot_name])).toEqual([[1, "Pat"], [2, "Alex"]]);
@@ -365,6 +367,8 @@ test.describe("experiment", () => {
     expect(t("chat").map((c) => c.bot_condition)).toEqual(["mirror", "inverse"]);
     expect(t("affiliation")[0].affiliation_mirror).toBeCloseTo(1.5, 10);
     expect(t("affiliation")[0].affiliation_inverse).toBeCloseTo(-7 / 6, 10);
+    expect(t("affiliation")[0]).toMatchObject({ affiliation_n_items_mirror: 6, affiliation_n_items_inverse: 6 });
+    expect(mineOut.participant.require_all_items).toBe(true);
     // Feedback: answered or not, and length, in the public files; the text only in feedback.csv.
     expect(t("feedback")[0]).toMatchObject({ feedback_task_understanding_answered: true,
       feedback_task_understanding_n_chars: "FEEDBACKMARKER I chatted with two bots".length,
@@ -444,19 +448,119 @@ test.describe("experiment", () => {
     expect(partial.affiliation_inverse).toBe(null);
   });
 
-  test("the BFI accepts at most 5 blank items", async ({ page }) => {
+  test("main study: every BFI item and the attention check must be answered; any attention-check answer lets them continue", async ({ page }) => {
     await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
     await page.getByRole("button", { name: "I agree to participate" }).click();
-    await setSurvey(page, { bfi: bfiAnswers([1, 2, 3, 4, 5, 6]) });
+    await expect(page.getByText("Please answer every statement.")).toBeVisible();
+    // One statement blank: blocked, the gap highlighted, the other answers kept.
+    await setSurvey(page, { bfi: bfiAnswers([17]) });
     await page.locator('input[value="Continue"]').click();
-    await expect(page.getByText("You have left 6 statements blank")).toBeVisible();
+    await expect(page.getByText("1 statement has not been answered yet.", { exact: false })).toBeVisible();
+    await expect(page.locator(".sd-matrix__row--error")).toHaveCount(1);
+    await expect(page.locator(".sd-matrix__row--error")).toContainText(Castiello.BFI_ITEMS[16].text);
+    expect(await page.evaluate(() => Object.keys(window.__survey.getValue("bfi")).length)).toBe(44); // 43 items + attention check
     await expect(page.locator("#jspsych-instructions-next")).toHaveCount(0);
-
-    await setSurvey(page, { bfi: bfiAnswers([1, 2, 3, 4, 5]) });
+    // All 44 items but no attention-check answer: still blocked.
+    const noAc = bfiAnswers();
+    delete noAc.attention_check;
+    await page.evaluate(() => window.__survey.clearValue("bfi"));
+    await setSurvey(page, { bfi: noAc });
     await page.locator('input[value="Continue"]').click();
-    await expect(page.locator("#jspsych-instructions-next")).toBeVisible();
+    await expect(page.locator(".sd-matrix__row--error")).toHaveCount(1);
+    await expect(page.locator(".sd-matrix__row--error")).toContainText(Castiello.ATTENTION_CHECK.text);
+    await expect(page.locator("#jspsych-instructions-next")).toHaveCount(0);
+    // Answered, but not with the instructed answer: they continue, and the page never says which
+    // answer was expected.
+    await setSurvey(page, { bfi: { ...bfiAnswers(), attention_check: 5 } });
+    await page.locator('input[value="Continue"]').click();
+    await expect(page.locator("#jspsych-instructions-next")).toBeVisible({ timeout: 15000 });
     const bfi = await page.evaluate(() => window.__saver.allTrials.find((t) => t.task === "bfi"));
-    expect(bfi.bfi_n_skipped).toBe(5);
+    expect(bfi).toMatchObject({ bfi_n_skipped: 0, attention_check_response: 5, bfi_required_all: true });
+  });
+
+  test("main study: all twelve ratings are required; a blank block or one missing rating blocks, 0 and negative ratings count", async ({ page }) => {
+    test.setTimeout(240000);
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    await page.getByRole("button", { name: "I agree to participate" }).click();
+    await setSurvey(page, { bfi: bfiAnswers() });
+    await page.locator('input[value="Continue"]').click();
+    await page.locator("#jspsych-instructions-next").click();
+    await chat(page, 1);
+    await chat(page, 2);
+    const blocked = async (answers, nErrorRows) => {
+      await page.waitForFunction(() => window.__survey && window.__survey.getQuestionByName("aff_similar"));
+      await page.evaluate(() => window.__survey.clear(true, false));
+      if (Object.keys(answers).length) await setSurvey(page, answers);
+      await page.locator('input[value="Continue"]').click();
+      await expect(page.locator(".sd-matrix__row--error")).toHaveCount(nErrorRows);
+      await expect(page.locator('[data-name="age"]')).toHaveCount(0); // still on the ratings
+    };
+    await blocked({}, 12); // nothing answered
+    const oneBot = Object.fromEntries(Object.entries(AFF).map(([k, v]) => [k, { chat1: v.chat1 }]));
+    await blocked(oneBot, 6); // the second chatbot's block left blank
+    const elevenOf12 = { ...AFF, aff_understood: { chat1: 1 } };
+    await blocked(elevenOf12, 1); // a single missing rating
+    expect(await page.evaluate(() => window.__survey.getValue("aff_similar"))).toEqual({ chat1: 2, chat2: -1 }); // answers kept
+    // All twelve, with zeros and negatives: continues.
+    const zeros = Object.fromEntries(Object.keys(AFF).map((k) => [k, { chat1: 0, chat2: -2 }]));
+    await setSurvey(page, zeros);
+    await page.locator('input[value="Continue"]').click();
+    await expect(page.locator('input[type="number"]')).toBeVisible();
+    const aff = await page.evaluate(() => window.__saver.allTrials.find((t) => t.task === "affiliation"));
+    // chat 2: −2 on the four positive items, +2 on the two reversed: (−8 + 4) / 6.
+    expect(aff).toMatchObject({ affiliation_n_items_chat1: 6, affiliation_n_items_chat2: 6, affiliation_chat1: 0, affiliation_required_all: true });
+    expect(aff.affiliation_chat2).toBeCloseTo(-4 / 6, 10);
+  });
+
+  test("main study: a participant can leave from the questionnaire without answering the rest; the answers so far are saved and the study ends as withdrawn", async ({ page }) => {
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await page.getByRole("button", { name: "I agree to participate" }).click();
+    await setSurvey(page, { bfi: { bfi_01: 4, bfi_02: 3 } });
+    await page.getByRole("button", { name: "Stop and leave the study" }).click();
+    await expect(page.getByText("Leave the study now? The answers you have given so far are saved.")).toBeVisible();
+    await page.getByRole("button", { name: "Keep going" }).click(); // changing their mind is fine
+    expect(await page.evaluate(() => window.__survey.getValue("bfi"))).toEqual({ bfi_01: 4, bfi_02: 3 });
+    await page.getByRole("button", { name: "Stop and leave the study" }).click();
+    await page.getByRole("button", { name: "Yes, leave the study" }).click();
+    await expect(page.getByRole("heading", { name: "You have left the study" })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("You chose to stop the study.")).toBeVisible();
+    await expect(page.getByText("This study investigates if people have different feelings of connection")).toBeVisible();
+    await page.evaluate(() => window.__saver._settle());
+    const p = await participantDoc(docId);
+    expect(p).toMatchObject({ completed: false, ended_early: "withdrew" });
+    expect(p.bfi_done).toBeUndefined();
+    const t = (await trialsOf(docId)).find((x) => x.task === "bfi");
+    expect(t).toMatchObject({ questionnaire_withdrawn: true, withdrawn_from: "bfi", response: { bfi: { bfi_01: 4, bfi_02: 3 } } });
+    expect(await sessionOf(docId)).toBe(null); // never scored: no chats were set up
+  });
+
+  test("main study: leaving from the ratings page keeps the ratings given, with their count, and no score from fewer than six", async ({ page }) => {
+    test.setTimeout(240000);
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await page.getByRole("button", { name: "I agree to participate" }).click();
+    await setSurvey(page, { bfi: bfiAnswers() });
+    await page.locator('input[value="Continue"]').click();
+    await page.locator("#jspsych-instructions-next").click();
+    await chat(page, 1);
+    await chat(page, 2);
+    await setSurvey(page, { aff_similar: { chat1: 2, chat2: 0 }, aff_enjoy: { chat1: 1 } });
+    await page.getByRole("button", { name: "Stop and leave the study" }).click();
+    await page.getByRole("button", { name: "Yes, leave the study" }).click();
+    await expect(page.getByRole("heading", { name: "You have left the study" })).toBeVisible({ timeout: 15000 });
+    await page.evaluate(() => window.__saver._settle());
+    expect(await participantDoc(docId)).toMatchObject({ completed: false, ended_early: "withdrew" });
+    const a = (await trialsOf(docId)).find((x) => x.task === "affiliation");
+    expect(a).toMatchObject({ questionnaire_withdrawn: true, withdrawn_from: "affiliation",
+      response: { aff_similar: { chat1: 2, chat2: 0 }, aff_enjoy: { chat1: 1 } } });
+    // Scores, if the page computed any on leaving, are never from fewer than six items.
+    expect(a.affiliation_chat1 ?? null).toBe(null);
+    expect(a.affiliation_chat2 ?? null).toBe(null);
   });
 
   test("an abandoned chat is never marked complete", async ({ page }) => {
@@ -595,10 +699,10 @@ test.describe("experiment", () => {
         "&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&order=mirror-first&cc=XYZ");
       await page.waitForTimeout(3000);
       // Not emulator mode: no emulator banner, nothing sent to the emulators or the test chat service,
-      // and without Prolific's parameters the page stops before any request.
+      // and, while the main study's Prolific study is not set, the published page does not open.
       await expect(page.getByText("Emulator mode")).toHaveCount(0);
       expect(outside.filter((h) => /^(127\.0\.0\.1|localhost)(:|$)/.test(h))).toEqual([]);
-      await expect(page.getByRole("heading", { name: "This link cannot be used" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Study not available" })).toBeVisible();
       expect(outside).toEqual([]);
     } finally {
       await b.close();
@@ -631,8 +735,9 @@ test.describe("experiment", () => {
   test("Prolific access: without the three Prolific parameters the page stops before sign-in", async ({ page }) => {
     const outside = [];
     page.on("request", (rq) => { if (!rq.url().startsWith("http://localhost:8017")) outside.push(new URL(rq.url()).pathname); });
-    // Missing parameters, or another Prolific study's id (e.g. Pilot B's link).
-    for (const qs of ["", "&PROLIFIC_PID=onlythis", "&PROLIFIC_PID=a1&STUDY_ID=6ae2c1c891a6603199aad8fc", "&PROLIFIC_PID=a1&STUDY_ID=000000000000000000000000&SESSION_ID=s1"]) {
+    // Missing parameters. (A wrong study id is refused by the service once prolific.study_id is set:
+    // see chat-service.spec.js, "Prolific access".)
+    for (const qs of ["", "&PROLIFIC_PID=onlythis", "&PROLIFIC_PID=a1&STUDY_ID=s1"]) {
       outside.length = 0;
       await page.goto("/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + qs);
       await expect(page.getByRole("heading", { name: "This link cannot be used" })).toBeVisible();

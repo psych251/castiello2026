@@ -220,7 +220,11 @@ function createStudyService(opts) {
 
     const answers = readBfi(body.bfi);
     const scored = Castiello.scoreBfi(answers);
-    if (scored.n_skipped > config.max_bfi_skips) {
+    const requireAll = config.experiments[experimentId].require_all_items === true;
+    if (scored.n_skipped > (requireAll ? 0 : config.max_bfi_skips)) {
+      throw new ApiError(400, "too_many_skips", "Too many questionnaire items were left blank.");
+    }
+    if (requireAll && scored.attention_check_response == null) {
       throw new ApiError(400, "too_many_skips", "Too many questionnaire items were left blank.");
     }
     const profile = profileOf(experimentId);
@@ -267,6 +271,7 @@ function createStudyService(opts) {
       bfi_raw: scored.raw,
       bfi_n_skipped: scored.n_skipped,
       bfi_items_answered: scored.items_answered,
+      require_all_items: requireAll,
       attention_check_response: scored.attention_check_response,
       attention_check_passed: scored.attention_check_passed,
       traits: mirror,

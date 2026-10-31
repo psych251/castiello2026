@@ -912,6 +912,9 @@ test.describe("chat service", () => {
     for (const id of ["castiello2026-pilot-b", "castiello2026-pilot-c", "castiello2026-phase2"]) {
       expect((await real.call("/access", { experiment_id: id }, null)).body.error).toBe("study_closed");
     }
+    // The main study is not launched: deployed, it refuses everyone until its Prolific study is set.
+    const deployedMain = makeService({ realExperiments: true, allowUnconfiguredProlific: false });
+    expect((await deployedMain.call("/access", { experiment_id: "castiello2026-main", prolific: { pid: "P1", study_id: "S1", session_id: "X1" } }, null)).body.error).toBe("study_not_configured");
   });
 
   test("questionnaire answers are checked on the server", async () => {
@@ -924,6 +927,27 @@ test.describe("chat service", () => {
     expect((await start(null)).body.error).toBe("bad_bfi");
     expect(await sessionDoc(who.pid)).toBe(null);
     expect((await start(bfiAnswers([1, 2, 3, 4, 5]))).status).toBe(200);
+  });
+
+  test("the main study (require_all_items) accepts only a fully answered questionnaire; the pilots keep the 5-item allowance", async () => {
+    const svc = makeService();
+    const main = "castiello2026-main";
+    const start = (bfi, study = main) => { const who = newParticipant(); return svc.call("/session", { experiment_id: study, participant_id: who.pid, bfi }, who.uid).then((r) => ({ r, who })); };
+    expect((await start(bfiAnswers([40]))).r.body.error).toBe("too_many_skips"); // one blank item
+    const noAc = bfiAnswers([]);
+    delete noAc.attention_check;
+    expect((await start(noAc)).r.body.error).toBe("too_many_skips"); // attention check unanswered
+    const wrongAc = { ...bfiAnswers([]), attention_check: 5 }; // answered, but not "Disagree"
+    const w = await start(wrongAc);
+    expect(w.r.status).toBe(200); // the correct answer is not required to continue
+    const ws = (await adminDb().doc(`experiments/${main}/participants/${w.who.pid}/private/session`).get()).data();
+    expect(ws).toMatchObject({ require_all_items: true, bfi_n_skipped: 0, attention_check_passed: false, study_phase: "main" });
+    expect((await start(bfiAnswers([]))).r.status).toBe(200);
+    // Pilot D, unchanged: up to 5 blank items, attention check optional.
+    expect((await start(bfiAnswers([1, 2, 3, 4, 5]), EXP)).r.status).toBe(200);
+    const p = await start(noAc, EXP);
+    expect(p.r.status).toBe(200);
+    expect((await adminDb().doc(`experiments/${EXP}/participants/${p.who.pid}/private/session`).get()).data().require_all_items).toBe(false);
   });
 
   test("with an odd chat length (25) the bot answers the participant's last message", async () => {

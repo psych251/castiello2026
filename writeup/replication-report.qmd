@@ -49,7 +49,7 @@ library(jsonlite)
 
 # Must match EXPERIMENT.id in experiment.js, and the --experiment you passed to the export.
 # Phase 2 runs under its own id, so its data never mix with Phase 1's.
-experiment_id        <- "castiello2026-pilot-b"
+experiment_id        <- "castiello2026-main"
 experiment_id_phase2 <- "castiello2026-phase2"
 # Each pilot is kept as its own dataset: shown on its own rows of the Key statistics and Pilot
 # results tables, never pooled with another pilot or with the data read from experiment_id.

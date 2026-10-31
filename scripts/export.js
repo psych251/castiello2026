@@ -203,6 +203,7 @@ function writeCsv(file, rows, firstColumns) {
       n_model_failures: sess.n_model_failures || 0,
       safety_version: sess.safety_version || null, model_safety_settings: sess.model_safety_settings || null,
       n_safety_flags: sess.n_safety_flags || 0,
+      require_all_items: sess.require_all_items === true,
       chat1_safety_stopped: !!sess.chat1_safety_stopped_at, chat2_safety_stopped: !!sess.chat2_safety_stopped_at,
     } : { chat1_complete: false, chat2_complete: false };
     if (sess && sess.invite_label) identifiers[identifiers.length - 1].invite_label = sess.invite_label;
@@ -249,7 +250,11 @@ function writeCsv(file, rows, firstColumns) {
       if (t.task === "chat" || t.task === "chat_intro") t.bot_condition = conditionOf(t.chat_index);
       if (t.task === "chat") t.server_n_messages = shown(t.chat_index);
       if (t.task === "affiliation") {
-        for (const chat of [1, 2]) t["affiliation_" + conditionOf(chat)] = t["affiliation_chat" + chat] ?? null;
+        for (const chat of [1, 2]) {
+          t["affiliation_" + conditionOf(chat)] = t["affiliation_chat" + chat] ?? null;
+          // Answered items behind that score (0–6); missing on rows saved before it was recorded.
+          t["affiliation_n_items_" + conditionOf(chat)] = t["affiliation_n_items_chat" + chat] ?? null;
+        }
       }
       return t;
     });

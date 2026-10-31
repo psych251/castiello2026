@@ -33,7 +33,8 @@ window.TEMPLATE_VERSION = "0.1.0";
 const EXPERIMENT = {
   // Firestore path: experiments/<id>/participants/... Change it for each phase so pilot and
   // real data never mix. Must match experiment_id in writeup/replication-report.qmd.
-  // The main replication (planned 2026-10-29; 50 recruited; not yet registered or launched). Every
+  // The main replication (planned 2026-10-29; recruitment stops at 50 completed, and returned or
+  // timed-out Prolific submissions do not count; not yet registered or launched). Every
   // pilot keeps its own id and records and is never pooled with it: Pilot B ("castiello2026-pilot-b",
   // naive Prolific), Pilot C ("castiello2026-pilot-c", the researcher and informed testers) and
   // Pilot D ("castiello2026-pilot-d", the revised naive Prolific pilot, which ran as commit 9449b20).
@@ -367,10 +368,12 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
 
   // -------------------------------------------------------------------------
   // 1. Consent (course-wide IRB text; edit only the contact address)
-  // OPEN BEFORE MAIN-STUDY LAUNCH (2026-10-29): this text says participants "may decline to answer
-  // any or all of the following questions", but with require_all_items the questionnaire pages
-  // need every answer to continue (leaving stays possible at any time). Replacement wording is
-  // with the protocol director for review; the text below is unchanged until it is approved.
+  // Main study (2026-10-30, the student's decision): the course text's "You may decline to answer
+  // any or all of the following questions" is replaced, because with require_all_items the
+  // personality questionnaire and the ratings need every answer to continue. Participants may
+  // still decline anything in the chats, skip the questions about themselves and the feedback, and
+  // leave at any time. PENDING the protocol director's approval: do not launch until approved. The
+  // pilots ran with the course text unchanged.
   // -------------------------------------------------------------------------
   const consent = {
     type: jsPsychHtmlButtonResponse,
@@ -381,8 +384,13 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
         cognitive scientists in the Stanford Department of Psychology. If you have questions about
         this research, please contact us at <a href="mailto:${EXPERIMENT.contact_email}">${EXPERIMENT.contact_email}</a>.
         You must be at least 18 years old to participate. Your participation in this research is
-        voluntary. You may decline to answer any or all of the following questions. You may decline
-        further participation, at any time, without adverse consequences. Your anonymity is assured;
+        voluntary. In the conversations with the chatbots, you do not have to discuss anything you
+        would rather not. To continue past the personality questionnaire and the ratings of the
+        chatbots, you will need to answer every question on those pages; the questions about you
+        (such as your age) and the feedback questions are optional. You may decline further
+        participation, at any time, without adverse consequences: you can leave the study at any
+        point, using the "Stop and leave the study" button where it appears or by closing this
+        window. Your anonymity is assured;
         the researchers who have requested your participation will not receive any personal
         information about you.</p>
       </div>`,
@@ -637,7 +645,7 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
       completeText: "Continue",
       pages: [{
         elements: [
-          // The consent text promises participants may decline any question, so nothing here is required.
+          // Optional: the consent text says the questions about the participant are optional.
           { type: "text", name: "age", title: "How old are you?", inputType: "number", min: 18, max: 120 },
           {
             type: "radiogroup", name: "gender", title: "What is your gender?",

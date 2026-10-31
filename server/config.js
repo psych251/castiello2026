@@ -72,10 +72,12 @@ module.exports = {
     // Prolific draft "Pilot D" (duplicated from Pilot B, 2026-10-29): 10 places, so a cap of 20.
     "castiello2026-pilot-d": { phase: "pilot-d", open: true, max_sessions: 20, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v3",
       prolific: { study_id: "6ae2c1c891a6603199aad8fc", max_sessions_per_participant: 2 } },
-    // Main replication (50 recruited; planned 2026-10-29, not yet registered or launched). Separate
+    // Main replication (recruitment stops at 50 completed: Prolific refills the places of returned
+    // and timed-out submissions; planned 2026-10-29, not yet registered or launched). Separate
     // from every pilot. All questionnaire items are required, as in the original study (the
-    // authors' confirmation). BEFORE LAUNCH set prolific.study_id and max_sessions; until then
-    // the deployed service refuses it, and it stays paused until a researcher resumes it.
+    // authors' confirmation). BEFORE LAUNCH set prolific.study_id and max_sessions (above 50, to
+    // leave room for returns and time-outs); until then the deployed service refuses it, and it
+    // stays paused until a researcher resumes it.
     "castiello2026-main": { phase: "main", open: true, max_sessions: 0, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v3",
       require_all_items: true, prolific: { study_id: null, max_sessions_per_participant: 2 } },
     // Closed 2026-10-27 (was max_sessions: 200). Its prompt profile is to be decided.

@@ -78,7 +78,8 @@ module.exports = {
     // authors' confirmation). BEFORE LAUNCH set prolific.study_id and max_sessions (above 50, to
     // leave room for returns and time-outs); until then the deployed service refuses it, and it
     // stays paused until a researcher resumes it.
-    "castiello2026-main": { phase: "main", open: true, max_sessions: 0, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v3",
+    // Runs the revision made after Pilot D's prompt disclosure: profile safety-v4, reply check v3.
+    "castiello2026-main": { phase: "main", open: true, max_sessions: 0, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v4",
       require_all_items: true, prolific: { study_id: null, max_sessions_per_participant: 2 } },
     // Closed 2026-10-27 (was max_sessions: 200). Its prompt profile is to be decided.
     "castiello2026-phase2": { phase: "phase2", open: false, max_sessions: 0, prompt_profile: "castiello2026-exp3-safety-v3" },
@@ -112,6 +113,21 @@ module.exports = {
     "castiello2026-exp3-safety-v3": {
       prompt: "v3",
       screen_replies: true,
+      safety_settings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+      ],
+      generation: { thinking_level: "LOW" },
+    },
+    // Main study (2026-11-01): v3 plus one more boundary (only the message the person will read) and
+    // reply check v3 (v2 plus clear prompt disclosures and drafting artifacts). The same thresholds
+    // and generation settings as v3. Pilots C and D ran v3 with check v2, and those stay as they were.
+    "castiello2026-exp3-safety-v4": {
+      prompt: "v4",
+      screen_replies: true,
+      screen_version: "castiello2026-screen-v3",
       safety_settings: [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },

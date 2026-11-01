@@ -267,8 +267,8 @@ function style(texts) {
   const Safety = require("../server/safety.js");
   if (testWord) {
     const real = Safety.screenReply;
-    Safety.screenReply = (text) => {
-      const r = real(text);
+    Safety.screenReply = (text, opts) => {
+      const r = real(text, opts);
       if (!new RegExp("\\b" + testWord + "\\b", "i").test(String(text))) return r;
       return { flagged: true, rules: [...r.rules, "test_marker"], categories: [...new Set([...r.categories, "test_marker"])] };
     };
@@ -376,7 +376,7 @@ function style(texts) {
     model: { provider: model.provider, model_id: model.model_id, access: config.model.gemini.access,
       vertex_project: config.model.gemini.vertex_project, vertex_location: config.model.gemini.vertex_location, generation: config.model.generation },
     prompt_profile: profileName, profile_settings: config.prompt_profiles[profileName], limits: config.limits,
-    safety_version: Safety.VERSION, test_flag_word: testWord || null, aborted, scenarios: SCENARIOS, profiles: PROFILES, cases, conversations }, null, 2));
+    safety_version: config.prompt_profiles[profileName].screen_version || Safety.VERSION, test_flag_word: testWord || null, aborted, scenarios: SCENARIOS, profiles: PROFILES, cases, conversations }, null, 2));
   fs.writeFileSync(path.join(out, "summary.csv"), csv(summary));
   if (live) fs.writeFileSync(path.join(out, "calls.jsonl"), sent.map((r) => JSON.stringify(r)).join("\n") + "\n");
   const blind = conversations.map((x) => ({ x, id: crypto.randomBytes(4).toString("hex") })).sort((a, b) => a.id.localeCompare(b.id));

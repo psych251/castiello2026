@@ -289,7 +289,7 @@ function createStudyService(opts) {
       chat2_prompt: Castiello.PROMPTS[profile.prompt](chats[1].scores, chats[1].name),
       opener_trigger: Castiello.OPENER_TRIGGER,
       prompt_version: profile.name,
-      safety_version: profile.screen_replies ? Safety.VERSION : null,
+      safety_version: profile.screen_replies ? (profile.screen_version || Safety.VERSION) : null,
       model_safety_settings: profile.safety_settings || null,
       limits: config.limits,
       invite_label: inviteLabel,
@@ -517,7 +517,7 @@ function createStudyService(opts) {
       if (screen && Safety.PROVIDER_BLOCK.test(finish || "")) {
         check = { flagged: true, rules: ["provider_block"], categories: ["provider_block"] };
       } else if (screen && text) {
-        try { check = Safety.screenReply(text); } catch (e) { check = { flagged: true, rules: ["screen_error"], categories: ["screen_error"] }; }
+        try { check = Safety.screenReply(text, { version: session.safety_version, prompt: request.system }); } catch (e) { check = { flagged: true, rules: ["screen_error"], categories: ["screen_error"] }; }
       }
       if (check.flagged) {
         await store.saveWithheld(experimentId, participantId, {

@@ -25,6 +25,13 @@ skills in `.claude/skills/` for the detailed procedures.
   the template for the deployed settings),
   `config.js` (chat length, allowed study ids and session caps, hosting), `castiello.js` (items,
   scoring keys and prompt, shared with the page, which loads it from `server/`).
+  `safety.js` is the local check on every bot reply before display; it makes no model call.
+  Prompt texts and reply checks are versioned per study through `prompt_profiles` in `config.js`,
+  and a session saves both and keeps them: Pilots A and B `castiello2026-exp3-supplement-v1` (no
+  check), Pilots C and D `castiello2026-exp3-safety-v3` with `castiello2026-screen-v2`, the main
+  study `castiello2026-exp3-safety-v4` with `castiello2026-screen-v3` (added 2026-11-01 after
+  Pilot D's prompt disclosure). Never edit a version a study has run: add a new one. The tests pin
+  prompt v3 and check v2 by hash.
   `server/.env.local` (committed, no secrets) selects the simulated model, and is read only by
   the emulators. The browser gets only the bot names and replies; the model gets only
   the bot's prompt and that chat's messages, never a participant id or anything derived from one.
@@ -64,8 +71,11 @@ skills in `.claude/skills/` for the detailed procedures.
 - `npm start` serves the site at http://localhost:8000 (needed: `file://` won't work for Firebase).
   Without `?emulator=1` it talks to the live project, and chats stop at "cannot connect" while
   `EXPERIMENT.chat_endpoint` is empty.
-- `npm test` runs the Auth, Firestore and Functions emulators + Playwright end to end (36 tests:
-  15 for the chat service, 4 of them Gemini with a mocked SDK or network, and 21 for the
+- `npx firebase deploy --only functions --project castiello2026-replication` deploys the chat
+  service from the local `server/` folder as it stands, committed or not, with the gitignored
+  `server/.env.castiello2026-replication`. The page deploys separately, by pushing `main`.
+- `npm test` runs the Auth, Firestore and Functions emulators + Playwright end to end (73 tests:
+  34 for the chat service, some of them Gemini with a mocked SDK or network, and 39 for the
   experiment). No test calls a real model. Run it before every push. It installs a test
   browser and the chat service's dependencies (`server/node_modules`) on first use; needs
   Java 17+ for the emulator.

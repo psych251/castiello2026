@@ -297,12 +297,12 @@ test.describe("experiment", () => {
     expect(s).toMatchObject({ order: "mirror-first", mirror_name: "Pat", inverse_name: "Alex",
       chat1_name: "Pat", chat1_condition: "mirror", chat2_name: "Alex", chat2_condition: "inverse",
       attention_check_passed: true, bfi_n_skipped: 0, require_all_items: true, study_phase: "main", model_provider: "fake", messages_per_chat: 24,
-      prompt_version: "castiello2026-exp3-safety-v3", safety_version: "castiello2026-screen-v2", invite_label: null, n_safety_flags: 0,
+      prompt_version: "castiello2026-exp3-safety-v4", safety_version: "castiello2026-screen-v3", invite_label: null, n_safety_flags: 0,
       prolific_study_id: "TESTSTUDY", prolific_pid_hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
     expect(JSON.stringify(s)).not.toContain("PROLIFICMARKER"); // the service keeps only a hash
     // The revised prompt: the paper's text (identity clause reworded), then the boundaries, the same for both bots.
     for (const k of ["chat1_prompt", "chat2_prompt"]) {
-      expect(s[k].endsWith("\n\n" + Castiello.BOUNDARIES_V3)).toBe(true);
+      expect(s[k].endsWith("\n\n" + Castiello.BOUNDARIES_V4)).toBe(true);
       expect(s[k]).not.toContain("never reveal you are an AI");
     }
     // The invite code is never stored on the participant's records (only its hash, on the invite).

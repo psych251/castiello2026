@@ -75,9 +75,96 @@ const RULES = [
   ["claims_human", "false_identity", /\b(?:i(?:'m| am) (?:definitely |really |actually |totally |completely |100% |one hundred percent )?(?:a )?(?:real|actual) (?:person|human)|i(?:'m| am) (?:definitely |really |actually )?(?:not (?:an? )?(?:ai|bot|chatbot|robot|program|machine))|i(?:'m| am) (?:definitely |really |actually )?(?:a )?human(?: being)?\b)/i],
 ];
 
-function screenReply(text) {
+// v3 (2026-11-01, main study only): v2's rules, unchanged, plus clear prompt disclosures and
+// drafting artifacts, after one shown Pilot D reply that held the model's reasoning, a quoted
+// rule, the bot's five scores and two drafts. Sessions keep the check they started with, so
+// Pilots C and D stay on v2 (RULES above).
+// These look for the FORM of a leak: labels, narration about "the user", scores set against trait
+// names, words copied from this chat's own prompt. Talking about AI, personality, instructions or
+// drafts is fine, and so is declining ("I can't share my instructions"). Reply length is not a
+// signal. Same limits as above: a paraphrase, or reasoning or doubled drafts with no label, passes.
+const VERSION_V3 = "castiello2026-screen-v3";
+
+const TRAIT = "openness|conscientiousness|extraversion|agreeableness|neuroticism";
+const LINE_START = String.raw`(?:^|\n)[ \t]*(?:[-*•>#]+[ \t]*)*[*_]*`; // past any list or bold marks
+const LABEL_END = String.raw`[*_]*[ \t]*[:：]`;
+const NUMBERED = String.raw`(?:option|version|attempt|alternative|reply|response)\s*#?(?:\d+|[a-c])[*_]*[ \t]*[:：)]`;
+const TWO_OR_THREE = String.raw`(?:2|two)\s*(?:-|–|—|to|or)\s*(?:3|three)\s+sentences\b`;
+
+const DISCLOSURE_RULES = [
+  // A trait name set against a score, or the other way round. Echoing the person's own score ("your
+  // neuroticism score of 4.5") and naming traits without a number pass.
+  ["trait_score", "prompt_disclosure", new RegExp(
+    String.raw`(?<!\byour\s)\b(?:${TRAIT})\b[*_]*(?:\s+score)?(?:\s+(?:is|was|of|at))?\s*[:=(\-–—]?[*_]*\s*\(?[1-5]\.\d{1,2}\b` +
+    String.raw`|(?<!\byour\s)\b(?:${TRAIT})\b[*_]*(?:\s+score)?\s*[:=][*_]*\s*[1-5]\b` +
+    String.raw`|\b[1-5]\.\d{1,2}\s+(?:on|for|in)\s+(?:my\s+)?(?:${TRAIT})\b`, "i")],
+  // Citing its own instructions as the source of what it does. Declining to share them passes,
+  // including "my instructions say I can't share that".
+  ["instructions_cited", "prompt_disclosure", new RegExp(
+    String.raw`\bper\s+(?:the\s+|my\s+)?(?:rules?|instructions?|(?:system\s+)?prompt|profile)\s*[:"“]` +
+    String.raw`|\bper\s+my\s+(?:rules?|instructions?|(?:system\s+)?prompt|profile)\b` +
+    String.raw`|\baccording\s+to\s+(?:my|the\s+system)\s+(?:rules?|instructions?|(?:system\s+)?prompt|profile)\b` +
+    String.raw`|\b(?:(?:my|the)\s+system\s+(?:prompt|message|instructions?)|my\s+(?:prompt|instructions?))\s+(?:says?|states?|tells?|asks?|requires?|wants?|specif(?:y|ies)|mentions?)\b` +
+    String.raw`(?!\s+(?:that\s+)?(?:i\s+|me\s+)?(?:can['’]?t|cannot|shouldn['’]?t|not\s+to)\b)` +
+    String.raw`|\bi(?:['’]m|\s+am|\s+was|['’]ve\s+been|\s+have\s+been)\s+(?:instructed|prompted|programmed|configured)\s+to\s+(?:act|adopt|reflect|respond|reply|play|sound)\b`, "i")],
+  // The experiment's own terms. "My condition", "a mirror" and "inverse functions" pass.
+  ["condition_assignment", "prompt_disclosure", /\b(?:mirror|inverse)\s+(?:bot|chatbot|condition|profile)\b|\bmy\s+assigned\s+(?:traits?|scores?|personality|profile|condition|role)\b|\bassigned\s+(?:to\s+)?(?:the\s+|a\s+|an\s+|this\s+)?(?:\w+\s+)?condition\b|\bcondition\s+assignment\b/i],
+  // Labelled drafts. "First draft of my essay", an inline "option A: pizza" and "send the final
+  // version: it's fine" pass.
+  ["draft_label", "drafting_artifact", new RegExp(
+    String.raw`\b(?:draft|revised|final|alternative|alternate)\s+(?:response|reply|answer|message)\s*(?:#?(?:\d+|[a-c]))?` + LABEL_END +
+    "|" + LINE_START + String.raw`(?:(?:(?:first|second|final|revised|new)\s+)?draft|(?:draft|revised|final|alternative|alternate)\s+version)\s*(?:#?(?:\d+|[a-c]))?` + LABEL_END +
+    "|" + LINE_START + NUMBERED + String.raw`[\s\S]*\n[ \t]*(?:[-*•>#]+[ \t]*)*[*_]*` + NUMBERED, "i")],
+  // Labelled planning.
+  ["planning_label", "drafting_artifact", new RegExp(
+    String.raw`\b(?:personality|persona|character|tone|style|constraints?|rules?|prompt|boundar(?:y|ies))\s+check` + LABEL_END +
+    "|" + LINE_START + String.raw`(?:(?:my\s+)?reasoning|thought\s+process|analysis|self[- ]check|internal\s+(?:notes?|commentary|monologue))` + LABEL_END, "i")],
+  // Narrating the person as "the user", at the start of a sentence. "The user manual" and "I think
+  // the user wants ..." pass.
+  ["about_the_user", "drafting_artifact", /(?:^|\n|[.!?]\s+)(?:the\s+)?user\s+(?:mentioned|said|says|asked|asks|is\s+asking|is\s+saying|is\s+telling|wants|wanted|didn['’]?t|did\s+not|doesn['’]?t|does\s+not|hasn['’]?t|has\s+not|just|stated|states|told|replied|responded|seems|shared|disclosed)\b/i],
+  // The prompt's length rule as a note to itself. "Two or three sentences is all I wrote" passes.
+  ["length_note", "drafting_artifact", new RegExp(
+    String.raw`(?:^|\n)[ \t]*[-*•][ \t]*(?:keep\s+(?:it|this)\s+(?:to\s+)?)?` + TWO_OR_THREE +
+    String.raw`|\bkeep\s+(?:it|this|my\s+(?:response|reply|answer)|the\s+(?:response|reply))\s+(?:to|under|within)\s+` + TWO_OR_THREE, "i")],
+];
+
+// Two checks against this chat's own prompt, which the service passes in; neither calls a model.
+// prompt_quote: this many words in a row copied from it. Eight lets "I'm an AI chatbot playing a
+// fictional person" through (seven in common), which is a truthful answer to being asked.
+const QUOTE_WORDS = 8;
+function words(s) {
+  return String(s).toLowerCase().replace(/[‘’]/g, "'").match(/[a-z0-9]+(?:['.][a-z0-9]+)*/g) || [];
+}
+function quotesPrompt(text, prompt) {
+  const p = words(prompt);
+  const inPrompt = new Set();
+  for (let i = 0; i + QUOTE_WORDS <= p.length; i++) inPrompt.add(p.slice(i, i + QUOTE_WORDS).join(" "));
+  const t = words(text);
+  for (let i = 0; i + QUOTE_WORDS <= t.length; i++) if (inPrompt.has(t.slice(i, i + QUOTE_WORDS).join(" "))) return true;
+  return false;
+}
+// assigned_scores: two or more of this bot's own five scores, however they are labelled.
+function repeatsScores(text, prompt) {
+  const own = new Set([...String(prompt).matchAll(new RegExp(String.raw`^(?:${TRAIT}): (\d\.\d\d)$`, "gim"))].map((m) => m[1]));
+  return new Set((String(text).match(/\b\d\.\d\d\b/g) || []).filter((x) => own.has(x))).size >= 2;
+}
+
+const SCREENS = {
+  [VERSION]: { rules: RULES, uses_prompt: false },
+  [VERSION_V3]: { rules: [...RULES, ...DISCLOSURE_RULES], uses_prompt: true },
+};
+
+// opts: { version, prompt }. No version: v2. An unknown version throws, and core.js then withholds
+// the reply (the check fails closed).
+function screenReply(text, opts = {}) {
   const t = String(text == null ? "" : text);
-  const hits = RULES.filter(([, , re]) => re.test(t));
+  const screen = SCREENS[opts.version || VERSION];
+  if (!screen) throw new Error("unknown reply check version: " + opts.version);
+  const hits = screen.rules.filter(([, , re]) => re.test(t)).map(([id, category]) => [id, category]);
+  if (screen.uses_prompt && opts.prompt) {
+    if (quotesPrompt(t, opts.prompt)) hits.push(["prompt_quote", "prompt_disclosure"]);
+    if (repeatsScores(t, opts.prompt)) hits.push(["assigned_scores", "prompt_disclosure"]);
+  }
   return {
     flagged: hits.length > 0,
     rules: hits.map(([id]) => id),
@@ -89,4 +176,4 @@ function screenReply(text) {
 // like a flagged reply: nothing is shown, and the event is recorded.
 const PROVIDER_BLOCK = /^(?:SAFETY|PROHIBITED_CONTENT|BLOCKLIST|SPII|IMAGE_SAFETY|RECITATION|PROMPT_BLOCKED_.*)$/;
 
-module.exports = { VERSION, RULES, screenReply, PROVIDER_BLOCK };
+module.exports = { VERSION, VERSION_V3, RULES, DISCLOSURE_RULES, QUOTE_WORDS, screenReply, PROVIDER_BLOCK };

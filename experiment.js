@@ -34,7 +34,7 @@ const EXPERIMENT = {
   // Firestore path: experiments/<id>/participants/... Change it for each phase so pilot and
   // real data never mix. Must match experiment_id in writeup/replication-report.qmd.
   // The main replication (planned 2026-10-29; recruitment stops at 50 completed, and returned or
-  // timed-out Prolific submissions do not count; not yet registered or launched). Every
+  // timed-out Prolific submissions do not count). Every
   // pilot keeps its own id and records and is never pooled with it: Pilot B ("castiello2026-pilot-b",
   // naive Prolific), Pilot C ("castiello2026-pilot-c", the researcher and informed testers) and
   // Pilot D ("castiello2026-pilot-d", the revised naive Prolific pilot, which ran as commit 9449b20).
@@ -50,7 +50,7 @@ const EXPERIMENT = {
   // Prolific: participants who finish are redirected to Prolific with this completion code. SET
   // BEFORE LAUNCH from the new Prolific study (not Pilot B's code). Until it is set, together with
   // prolific.study_id, the published page does not open.
-  prolific_completion_code: null, // set from the main study's Prolific draft (Pilot D used C15R004P)
+  prolific_completion_code: "C15R004P", // the main study draft's code (kept from Pilot D, which it duplicates)
 
   // Prolific access (Pilot D). The page needs Prolific's PROLIFIC_PID, STUDY_ID and SESSION_ID in
   // its address, and STUDY_ID must be study_id, before it signs in or saves anything; the chat
@@ -60,7 +60,7 @@ const EXPERIMENT = {
   // the researchers on Prolific instead). Kinds: technical_failure (the chat could not continue),
   // left_after_safety_stop, withdrew, paused.
   prolific: {
-    study_id: null, // the main study's Prolific study id (Pilot D's was 6ae2c1c891a6603199aad8fc)
+    study_id: "6ae7ea34be6966425ed1c27c", // the main study's Prolific draft (Pilot D's was 6ae2c1c891a6603199aad8fc)
     early_exit_codes: { technical_failure: null, left_after_safety_stop: null, withdrew: null, paused: null },
   },
 
@@ -372,7 +372,7 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
   // any or all of the following questions" is replaced, because with require_all_items the
   // personality questionnaire and the ratings need every answer to continue. Participants may
   // still decline anything in the chats, skip the questions about themselves and the feedback, and
-  // leave at any time. PENDING the protocol director's approval: do not launch until approved. The
+  // leave at any time. Approved by the protocol director (the student's report, 2026-11-01). The
   // pilots ran with the course text unchanged.
   // -------------------------------------------------------------------------
   const consent = {

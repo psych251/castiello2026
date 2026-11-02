@@ -13,12 +13,17 @@ const { createFakeModel, createModel } = require("../server/models.js");
 const { createHttpHandler } = require("../server/http.js");
 const { execFileSync } = require("child_process");
 const path = require("path");
+const fs = require("fs");
 const Castiello = require("../server/castiello.js");
 
 const EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST;
 const EXP = "castiello2026-pilot-d";
+// The study the real server/config.js accepts sessions for. Its Prolific id comes from config, so these
+// tests hold before and after the launch values are set (the emulated function accepts any id until then).
+const MAIN = "castiello2026-main";
+const MAIN_STUDY = config.experiments[MAIN].prolific.study_id;
 // EXP needs Prolific parameters; the emulated function accepts any study id while study_id is unset.
-const PROLIFIC = () => ({ pid: "svc" + Math.random().toString(36).slice(2, 12), study_id: "6ae2c1c891a6603199aad8fc", session_id: "sess" + Math.random().toString(36).slice(2, 8) });
+const PROLIFIC = () => ({ pid: "svc" + Math.random().toString(36).slice(2, 12), study_id: MAIN_STUDY || "TESTSTUDY", session_id: "sess" + Math.random().toString(36).slice(2, 8) });
 const V1 = "castiello2026-exp3-supplement-v1";
 const V2 = "castiello2026-exp3-safety-v2";
 const V3 = "castiello2026-exp3-safety-v3";
@@ -48,6 +53,8 @@ test.beforeAll(async () => {
   await adminDb().doc(`experiments/${EXP}/private_invites/${sha256(TEST_INVITE)}`).set({ label: "SVC", max_uses: 1000000, uses: 0, revoked: false });
   // Pilot C starts paused (default_paused); resumed here, as a researcher would.
   await adminDb().doc(`experiments/${EXP}/private_control/pause`).set({ paused: false });
+  await adminDb().doc(`experiments/${MAIN}/private_counters/sessions`).set({ n: -1000000 });
+  await adminDb().doc(`experiments/${MAIN}/private_control/pause`).set({ paused: false });
 });
 
 let db = null;
@@ -438,12 +445,12 @@ test.describe("chat service", () => {
     // Lifted for the Pilot C walkthrough: Pilot A, Pilot B and Phase 2 stay closed, Pilot C is
     // invite-only and paused until resumed.
     expect(config.suspended).toBe(false);
-    for (const id of ["castiello2026-pilot-a", "castiello2026-pilot-b", "castiello2026-pilot-c", "castiello2026-phase2"]) {
+    for (const id of ["castiello2026-pilot-a", "castiello2026-pilot-b", "castiello2026-pilot-c", EXP, "castiello2026-phase2"]) {
       expect(config.experiments[id]).toMatchObject({ open: false, max_sessions: 0 });
     }
-    // Pilot D: open, paused until resumed, Prolific access for the Pilot D draft only, 20 sessions.
-    expect(config.experiments[EXP]).toMatchObject({ open: true, default_paused: true, prompt_profile: V3, max_sessions: 20,
-      prolific: { study_id: "6ae2c1c891a6603199aad8fc", max_sessions_per_participant: 2 } });
+    // The main study: open, paused until resumed, Prolific access, 100 sessions (50 places). Pilot D is closed above.
+    expect(config.experiments[MAIN]).toMatchObject({ open: true, default_paused: true, prompt_profile: V4, max_sessions: 100,
+      prolific: { max_sessions_per_participant: 2 } });
 
     // The real function in the Functions emulator, as anyone could call it: closed studies refuse
     // new sessions and turns of existing ones, before any model call.
@@ -451,7 +458,7 @@ test.describe("chat service", () => {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ returnSecureToken: true }),
     });
     const { idToken, localId } = await r.json();
-    for (const id of ["castiello2026-pilot-a", "castiello2026-pilot-b", "castiello2026-pilot-c", "castiello2026-phase2"]) {
+    for (const id of ["castiello2026-pilot-a", "castiello2026-pilot-b", "castiello2026-pilot-c", EXP, "castiello2026-phase2"]) {
       const pid = localId + "-" + rnd();
       for (const [p, body] of [["/access", {}], ["/session", { bfi: bfiAnswers() }], ["/turn", { chat_index: 1, seq: 0 }]]) {
         const res = await fetch(`${CHAT_SERVER}${p}`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + idToken },
@@ -1132,12 +1139,23 @@ test.describe("chat service", () => {
     expect(closed.model.calls.length).toBe(0);
     // And the real Pilot B and Phase 2 settings are closed.
     const real = makeService({ realExperiments: true });
-    for (const id of ["castiello2026-pilot-b", "castiello2026-pilot-c", "castiello2026-phase2"]) {
+    for (const id of ["castiello2026-pilot-b", "castiello2026-pilot-c", EXP, "castiello2026-phase2"]) {
       expect((await real.call("/access", { experiment_id: id }, null)).body.error).toBe("study_closed");
     }
-    // The main study is not launched: deployed, it refuses everyone until its Prolific study is set.
+    // Deployed, the main study refuses everyone until its Prolific study is set, and then any other study's link.
     const deployedMain = makeService({ realExperiments: true, allowUnconfiguredProlific: false });
-    expect((await deployedMain.call("/access", { experiment_id: "castiello2026-main", prolific: { pid: "P1", study_id: "S1", session_id: "X1" } }, null)).body.error).toBe("study_not_configured");
+    expect((await deployedMain.call("/access", { experiment_id: "castiello2026-main", prolific: { pid: "P1", study_id: "S1", session_id: "X1" } }, null)).body.error).toBe(MAIN_STUDY ? "prolific_required" : "study_not_configured");
+  });
+
+  test("launch values: the page and the service name the same Prolific study, with a completion code, and never a pilot's", () => {
+    const page = fs.readFileSync(path.join(__dirname, "..", "experiment.js"), "utf8");
+    expect(/\n\s*id: "([^"]+)"/.exec(page)[1]).toBe(MAIN);
+    const pageStudy = JSON.parse(/prolific: \{\s*study_id: (null|"[^"]*")/.exec(page)[1]);
+    const code = JSON.parse(/prolific_completion_code: (null|"[^"]*")/.exec(page)[1]);
+    expect(pageStudy).toBe(MAIN_STUDY);
+    expect(!!code).toBe(!!MAIN_STUDY); // both set, or neither: the published page stays shut until both are
+    expect(MAIN_STUDY).not.toBe("6ae2c1c891a6603199aad8fc"); // not Pilot D's Prolific study
+    expect(config.experiments[MAIN]).toMatchObject({ open: true, default_paused: true, max_sessions: 100, prompt_profile: V4, require_all_items: true });
   });
 
   test("questionnaire answers are checked on the server", async () => {
@@ -1196,7 +1214,7 @@ test.describe("chat service", () => {
     const b = await signUp();
     const post = (token, body) => fetch(`${CHAT_SERVER}/session`, {
       method: "POST", headers: { "Content-Type": "application/json", ...BYPASS, ...(token ? { Authorization: "Bearer " + token } : {}) },
-      body: JSON.stringify({ experiment_id: EXP, bfi: bfiAnswers(), prolific: PROLIFIC(), ...body }),
+      body: JSON.stringify({ experiment_id: MAIN, bfi: bfiAnswers([]), prolific: PROLIFIC(), ...body }),
     });
     const pidA = a.uid + "-" + rnd();
     expect((await post(null, { participant_id: pidA })).status).toBe(401);

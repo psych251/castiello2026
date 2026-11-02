@@ -69,17 +69,18 @@ module.exports = {
     // prolific.max_sessions_per_participant sessions (a reload). BEFORE LAUNCH set prolific.study_id
     // and max_sessions (e.g. twice the places); until then the deployed service refuses it, and it
     // stays paused until a researcher resumes it.
-    // Prolific draft "Pilot D" (duplicated from Pilot B, 2026-10-29): 10 places, so a cap of 20.
-    "castiello2026-pilot-d": { phase: "pilot-d", open: true, max_sessions: 20, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v3",
+    // Prolific draft "Pilot D" (duplicated from Pilot B, 2026-10-29): 10 places, and a cap of 20 while it ran.
+    // Closed for the main study's launch, after its 10 participants; records kept.
+    "castiello2026-pilot-d": { phase: "pilot-d", open: false, max_sessions: 0, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v3",
       prolific: { study_id: "6ae2c1c891a6603199aad8fc", max_sessions_per_participant: 2 } },
     // Main replication (recruitment stops at 50 completed: Prolific refills the places of returned
     // and timed-out submissions; planned 2026-10-29, not yet registered or launched). Separate
     // from every pilot. All questionnaire items are required, as in the original study (the
-    // authors' confirmation). BEFORE LAUNCH set prolific.study_id and max_sessions (above 50, to
-    // leave room for returns and time-outs); until then the deployed service refuses it, and it
-    // stays paused until a researcher resumes it.
+    // authors' confirmation). 50 places, so a cap of 100 (twice the places, as for Pilot D), which
+    // leaves room for returns, time-outs and previews. BEFORE LAUNCH set prolific.study_id; until then
+    // the deployed service refuses it, and it stays paused until a researcher resumes it.
     // Runs the revision made after Pilot D's prompt disclosure: profile safety-v4, reply check v3.
-    "castiello2026-main": { phase: "main", open: true, max_sessions: 0, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v4",
+    "castiello2026-main": { phase: "main", open: true, max_sessions: 100, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v4",
       require_all_items: true, prolific: { study_id: null, max_sessions_per_participant: 2 } },
     // Closed 2026-10-27 (was max_sessions: 200). Its prompt profile is to be decided.
     "castiello2026-phase2": { phase: "phase2", open: false, max_sessions: 0, prompt_profile: "castiello2026-exp3-safety-v3" },

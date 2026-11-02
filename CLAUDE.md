@@ -77,8 +77,8 @@ skills in `.claude/skills/` for the detailed procedures.
 - `npx firebase deploy --only functions --project castiello2026-replication` deploys the chat
   service from the local `server/` folder as it stands, committed or not, with the gitignored
   `server/.env.castiello2026-replication`. The page deploys separately, by pushing `main`.
-- `npm test` runs the Auth, Firestore and Functions emulators + Playwright end to end (73 tests:
-  34 for the chat service, some of them Gemini with a mocked SDK or network, and 39 for the
+- `npm test` runs the Auth, Firestore and Functions emulators + Playwright end to end (74 tests:
+  35 for the chat service, some of them Gemini with a mocked SDK or network, and 39 for the
   experiment). No test calls a real model. Run it before every push. It installs a test
   browser and the chat service's dependencies (`server/node_modules`) on first use; needs
   Java 17+ for the emulator.

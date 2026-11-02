@@ -19,6 +19,10 @@ const Castiello = require("../server/castiello.js");
 const EMULATOR = process.env.EMULATOR === "1" || !!process.env.FIRESTORE_EMULATOR_HOST;
 const PROJECT = "demo-psych251";
 const EXPERIMENT_ID = "castiello2026-main";
+// The study id in the real server/config.js. Until it is set the emulators accept any id, so the tests
+// use a stand-in; once it is set they use it, and the page refuses every other study's link.
+const MAIN_STUDY = require("../server/config.js").experiments[EXPERIMENT_ID].prolific.study_id;
+const TEST_STUDY = MAIN_STUDY || "TESTSTUDY";
 // Pilot C is invite-only. The suite's own invite (made in beforeAll, emulator only) has plenty of uses.
 const TEST_INVITE = "test-invite-" + Math.random().toString(36).slice(2, 12);
 const sha256 = (x) => require("crypto").createHash("sha256").update(x).digest("hex");
@@ -82,9 +86,8 @@ const AFF = {
 // Every page load points at the test chat service, and skips the suspension (EXPERIMENT.suspended
 // and server/config.js `suspended`), which only test runs in the emulators may do.
 // The main study needs Prolific's three parameters; each page load gets a fresh Prolific ID unless
-// the test gives one (the service allows two sessions per Prolific ID). Its Prolific study id is not
-// set yet, which only the emulators allow, so any STUDY_ID is accepted here.
-const prolificQs = () => "PROLIFIC_PID=p" + Math.random().toString(36).slice(2, 12) + "&STUDY_ID=TESTSTUDY&SESSION_ID=s" + Math.random().toString(36).slice(2, 8);
+// the test gives one (the service allows two sessions per Prolific ID).
+const prolificQs = () => "PROLIFIC_PID=p" + Math.random().toString(36).slice(2, 12) + "&STUDY_ID=" + TEST_STUDY + "&SESSION_ID=s" + Math.random().toString(36).slice(2, 8);
 const url = (qs = "") => {
   const add = prolificQs().split("&").filter((kv) => !new RegExp("(^|&)" + kv.split("=")[0] + "=").test(qs)); // only what qs lacks
   return "/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&" + add.join("&") + (qs ? "&" + qs : "");
@@ -298,7 +301,7 @@ test.describe("experiment", () => {
       chat1_name: "Pat", chat1_condition: "mirror", chat2_name: "Alex", chat2_condition: "inverse",
       attention_check_passed: true, bfi_n_skipped: 0, require_all_items: true, study_phase: "main", model_provider: "fake", messages_per_chat: 24,
       prompt_version: "castiello2026-exp3-safety-v4", safety_version: "castiello2026-screen-v3", invite_label: null, n_safety_flags: 0,
-      prolific_study_id: "TESTSTUDY", prolific_pid_hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
+      prolific_study_id: TEST_STUDY, prolific_pid_hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
     expect(JSON.stringify(s)).not.toContain("PROLIFICMARKER"); // the service keeps only a hash
     // The revised prompt: the paper's text (identity clause reworded), then the boundaries, the same for both bots.
     for (const k of ["chat1_prompt", "chat2_prompt"]) {
@@ -699,10 +702,10 @@ test.describe("experiment", () => {
         "&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&order=mirror-first&cc=XYZ");
       await page.waitForTimeout(3000);
       // Not emulator mode: no emulator banner, nothing sent to the emulators or the test chat service,
-      // and, while the main study's Prolific study is not set, the published page does not open.
+      // and the published page does not open: its Prolific study is not set, or this address lacks Prolific's parameters.
       await expect(page.getByText("Emulator mode")).toHaveCount(0);
       expect(outside.filter((h) => /^(127\.0\.0\.1|localhost)(:|$)/.test(h))).toEqual([]);
-      await expect(page.getByRole("heading", { name: "Study not available" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: MAIN_STUDY ? "This link cannot be used" : "Study not available" })).toBeVisible();
       expect(outside).toEqual([]);
     } finally {
       await b.close();
@@ -735,9 +738,9 @@ test.describe("experiment", () => {
   test("Prolific access: without the three Prolific parameters the page stops before sign-in", async ({ page }) => {
     const outside = [];
     page.on("request", (rq) => { if (!rq.url().startsWith("http://localhost:8017")) outside.push(new URL(rq.url()).pathname); });
-    // Missing parameters. (A wrong study id is refused by the service once prolific.study_id is set:
-    // see chat-service.spec.js, "Prolific access".)
-    for (const qs of ["", "&PROLIFIC_PID=onlythis", "&PROLIFIC_PID=a1&STUDY_ID=s1"]) {
+    // Missing parameters, and once the study id is set, another Prolific study's link.
+    for (const qs of ["", "&PROLIFIC_PID=onlythis", "&PROLIFIC_PID=a1&STUDY_ID=s1",
+      ...(MAIN_STUDY ? ["&PROLIFIC_PID=a1&STUDY_ID=000000000000000000000000&SESSION_ID=s1"] : [])]) {
       outside.length = 0;
       await page.goto("/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + qs);
       await expect(page.getByRole("heading", { name: "This link cannot be used" })).toBeVisible();

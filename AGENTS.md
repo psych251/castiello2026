@@ -35,7 +35,7 @@ skills in `.claude/skills/` for the detailed procedures.
 
 ## Commands
 - `npm start` serves the site at http://localhost:8000 (needed: `file://` won't work for Firebase).
-- `npm test` runs the emulator + Playwright end to end (73 tests). Run it before every push.
+- `npm test` runs the emulator + Playwright end to end (74 tests). Run it before every push.
   It installs a test browser on first use; needs Java 17+ for the emulator.
 - `npm run export -- --experiment <id>` exports data.
 - `npm run operator -- --key <path>` (or `--emulator`) runs the researcher's chat-relay dashboard

@@ -52,6 +52,9 @@ skills in `.claude/skills/` for the detailed procedures.
   under "Key statistics" (`read_phase`, `paired_stats`, `comparison_plot`, `affiliation_plot`), so the
   exclusion rule and key comparison are defined once. It must render with no data, with Phase 1
   only, and with both phases.
+  The main study's prompt-disclosure review is recorded in `data/raw/<id>/disclosure_review.csv`
+  (participant_id, chat_index, seq; never any text). No file means the review has not been done; a
+  header with no rows means it found none. The report's sensitivity analysis reads it.
 - Phase 2 runs under its own `EXPERIMENT.id`; `experiment_id_phase2` in the report must match.
   When modifying the experiment for Phase 2, change exactly what the report's "Changes from
   Phase 1" table lists and nothing else, and ask before adding anything to that table.

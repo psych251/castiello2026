@@ -95,13 +95,34 @@ original <- tibble(
   d = 0.57, d_low = 0.36, d_high = 0.78, V = 3600, p_wilcox = NA_real_, prop_mirror = 0.64
 )
 prereg_d <- 0.3
+# Sample, used only by the demographics table: 57 male, 42 female, 1 nonbinary; age M = 34.86,
+# SD = 8.06, range 19 to 50; all native English speakers: Methods, "Participants" (p. 2).
+original_demo <- tibble(N = 100, age_m = 34.86, age_sd = 8.06, age_min = 19, age_max = 50,
+                        age_missing = 0, women = 42, men = 57, nonbinary = 1, other = 0, english = 100)
+# Sentiment of messages, used only by the exploratory sentiment table: paired t-tests per category,
+# mirror vs inverse, N = 100, Results, Experiment 3 (p. 8). The paper gives the magnitude of d and
+# states the direction in words ("fewer mixed and negative ... more positive"); the signs here are
+# mirror minus inverse. It does not report neutral. Chatbot interaction F(784, 3) = 108.86;
+# participant interaction F(784, 3) = 6.5. The paper prints the chatbot mixed d as "74" and the
+# chatbot positive CI as "1.24–0.76"; read here as 0.74 and 0.76 to 1.24.
+original_sentiment <- tribble(
+  ~Sender,       ~label,     ~d_original, ~t_original,
+  "Chatbot",     "positive",  1.00,        9.97,
+  "Chatbot",     "negative", -0.74,       -7.33,
+  "Chatbot",     "neutral",   NA,          NA,
+  "Chatbot",     "mixed",    -0.74,       -7.39,
+  "Participant", "positive",  0.28,        2.76,
+  "Participant", "negative", -0.51,       -5.09,
+  "Participant", "neutral",   NA,          NA,
+  "Participant", "mixed",    -0.29,       -2.88
+)
 ```
 
 ::: {.callout-note appearance="simple" icon=false}
 ## Project links
 
 - **Original paper:** Castiello, S., Pitliya, R. J., Lametti, D. R., & Murphy, R. A. (2026). Affiliation in human-AI interactions is based on shared psychological traits. *Communications Psychology, 4*, Article 93. <https://doi.org/10.1038/s44271-026-00433-8>
-- **Preregistration:** [OSF registration](https://osf.io/XXXXX) *(registered YYYY-MM-DD, before final data collection)*
+- **Preregistration:** [OSF registration](https://osf.io/jr7n8) *(registered 2026-11-01, before final data collection)*
 - **Live experiment:** <https://psych251.github.io/castiello2026/> (take the study exactly as participants did)
 - **Repository:** <https://github.com/psych251/castiello2026> (experiment code, data, and this report)
 :::
@@ -110,16 +131,19 @@ prereg_d <- 0.3
 
 | Tool and model | What it was used for | How you checked the output |
 |---|---|---|
-| Claude Code (Claude Opus 5.5) | Used it to check why one repo isn't set up for SSH | I checked the repo result afterwards |
-| ChatGPT (ChatGPT-6 Astra max) | Used it to browse and compare potential papers, understand Castiello et al.’s work, clarify some proposal instructions and provide outline and bullet points for the introduction part. | I read the paper myself and wrote the proposal with guidance. |
-| Claude Code (Claude Opus 5.5) | Used it to implement the experiment, personality scoring, chat service, Firebase backend, Gemini connection, data export, and automated tests. | After the participants' interface was set up, I reviewed it through local walkthroughs with synthesized responses. |
-| Claude Code (Claude Opus 5.5) | Used it to implement the report’s R analysis code, including exclusions, paired comparisons, effect sizes, figures, power calculations, and model response-time summaries. | I checked the code with simulated data first and then actual pilot A data. |
-| ChatGPT (ChatGPT-6 Astra max) | Used it to walk me through statistical concepts, plan the replication, and provide bullet points for report sections. | I used it as reference to write the report myself. |
-| Claude Code (Claude Opus 5.5) | Used it to export Pilot B data, match experiment records with Prolific submissions, prepare de-identified files, and identify problematic chatbot interactions. |  I reviewed the reconciliation summaries and Prolific submission information before approving payment. |
-| Claude Code (Claude Opus 5.5) | Used it to audit the personality implementation, prepare the study suspension, revise chatbot instructions, add reply checks and early-exit handling, and run synthetic evaluations. | I reviewed the proposed changes and test summaries and completed a walkthrough with real Gemini responses. |
-| Claude Code (Claude Opus 5.5) | Used it to investigate delays in Pilot C, examine timeout and retry records, revise waiting and recovery behavior, and prepare Pilot D. | I experienced the researcher walkthrough directly and collected informed testers’ feedback. |
-| Claude Code (Claude Opus 5.5) | Used it to review Pilot D records and chatbot replies, identify a prompt-information disclosure and false-positive reply checks, and summarize completion and technical outcomes. | I reviewed the findings and checked Prolific submissions before approving payment. |
-| Claude Code (Claude Opus 5.5) | Used it to add an instruction and a reply check against prompt disclosure for the main study after TA feedback, test them on synthetic text and stored pilot replies, deploy the chat service, and implement the disclosure sensitivity-analysis code. | I reviewed it and checked myself |
+| Claude Code (Claude Opus 5.5) | Used it to examine why my repo isn't set up for SSH. | I checked its result afterwards. |
+| ChatGPT (ChatGPT-6 Astra max) | Used it to browse the internet for potential papers and then compare them, and answer questions I have with the paper. | I gave my initial research interests and read the Castiello paper myself initially. |
+| Claude Code (Claude Opus 5.5) | Used it to design and implement the experiment, personality scoring, chat service, Firebase backend, Gemini connection, data export, and automated tests. | After the participants' interface was set up, I reviewed it through local walkthroughs with my own responses. |
+| ChatGPT (ChatGPT-6 Astra max) | Used it to walk through statistical concepts that I had trouble understanding, plan the experiment, and provide bullet points for report sections. | I used them as a starting point to write the report myself. |
+| Claude Code (Claude Opus 5.5) | Used it to export Pilot data, match experiment records with Prolific submissions so that I can decide whether to approve the payments, identify concerning chatbot behaviors and prepare de-identified files for course instructor's review. | I double-checked the reconciliation summaries, Prolific submission information, and the files to provide. |
+| Claude Code (Claude Opus 5.5) | Used it to suspend the study, redesign the personality implementation, revise chatbot security instructions, add reply checks and early-exit handling, and run synthetic evaluations. | I reviewed the proposed changes and test summaries and completed a local walkthrough with real Gemini responses. |
+| Claude Code (Claude Opus 5.5) | Used it to investigate delays in Pilot C, examine timeout and retry records, revise waiting and recovery behavior, and prepare Pilot D. | I performed a local researcher walkthrough directly, found extra informed testers and collected their feedback. |
+| Claude Code (Claude Opus 5.5) | Used it to examine Pilot D records and chatbot replies, identify a prompt leakage and false-positive reply checks, and summarize outcomes. | I reviewed the findings and discussed with TA about the prompt disclosure. |
+| Claude Code (Claude Opus 5.5) | Used it to add an instruction and a reply check against prompt disclosure for the main study after TA feedback, test them on synthetic text and stored pilot replies, deploy the chat service, and implement the disclosure sensitivity-analysis code. | I reviewed it. |
+| Claude Code (Claude Opus 5.5) | Used it to perform data analysis, including computing personality and affiliation scores, executing exclusions, comparing the results with the original authors' and generating the demographics table. | I reviewed the data analysis, asked some questions regarding statistical outcomes and instructed the visualizations making. |
+| Gemini (Gemini 3.8 Flash) | Used it to perform exploratory sentiment analysis through categorizing chatbot and participants messages as positive, negative, neutral or mixed. | I asked the TA's permission for uploading data to commercial models and reviewed the results. |
+| Claude Code (Claude Opus 5.5) | Used it to write the classification script and report code, compare sentiment across conditions, investigate associations between positive chatbot behaviors and participants' rate of affiliation, and make tables and figures. | I reviewed the sentiment analysis, asked some questions regarding statistical outcomes and instructed the visualizations making. |
+| ChatGPT (ChatGPT-6 Astra max) | Used it to plan my presentation, create editable slides, rehearse with me, summarize fellow classmates' feedback and identify missing parts in the report. | I finished the report writing. |
 
 
 I wrote all of the text in this report myself. AI tools were not used to write, rewrite or
@@ -127,17 +151,6 @@ paraphrase it, and were not used to generate, alter, or impute any participant d
 responsibility for the content of this report, including any errors introduced by AI tools.
 
 # Key statistics
-
-::: {.callout-tip icon=false}
-## Guidance
-
-One row per study for the key comparison: the original, your Phase 1 replication, and your
-Phase 2 extension. The table fills itself in from the data as each phase is exported, using the
-analysis code below (open "Show the analysis code"), which is shared by both phases so they are
-analysed identically. Edit that code once, here, to match your design and preregistered
-exclusion rule. On the scientific-extension track, the Phase 2 row reports the new comparison:
-adapt its code and say so in the caption.
-:::
 
 ```{r}
 #| label: analysis-functions
@@ -277,6 +290,16 @@ read_phase <- function(id) {
        disclosure_reviewed = file.exists(file.path(dir, "disclosure_review.csv")), disclosure_ids = disclosure_ids)
 }
 
+# p values as in APA style, for every table and caption: "< .001", otherwise no leading zero, two
+# decimals from .10 up and three below (.004, .038, .33). p_eq() adds "p =" or "p <" for text.
+fmt_p <- function(p) {
+  if (length(p) != 1) return(vapply(p, fmt_p, character(1)))
+  if (is.na(p)) return(NA_character_)
+  if (p < 0.001) return("< .001")
+  sub("^0\\.", ".", sprintf(if (p < 0.1) "%.3f" else "%.2f", p))
+}
+p_eq <- function(p) { f <- fmt_p(p); if (startsWith(f, "<")) paste("p", f) else paste("p =", f) }
+
 # The key statistic: paired t-test of mirror vs inverse affiliation, d_z with a 95% CI, and the
 # Wilcoxon signed rank test (continuity corrected, as in the paper). NULL until there are at least
 # two analysed participants; NA statistics if their differences do not vary.
@@ -293,26 +316,54 @@ paired_stats <- function(d) {
   dz <- mean(k$diff) / sd(k$diff)
   se <- sqrt(1 / n + dz^2 / (2 * n))
   out |> mutate(t = unname(tt$statistic), p = tt$p.value,
-                p_text = format.pval(tt$p.value, digits = 2, eps = 0.001),
+                p_text = fmt_p(tt$p.value),
                 d = dz, d_low = dz - 1.96 * se, d_high = dz + 1.96 * se,
                 V = unname(wx$statistic), p_wilcox = wx$p.value)
 }
 
-# Side-by-side figure: the effect size (d_z, 95% CI) of each study on the same axis, in the order
-# given. The original's means are not reported, so effect sizes are what can be compared.
-comparison_plot <- function(...) {
+# Figure style, shared by every figure. Conditions are always mirror blue and inverse orange; in the
+# comparison figures the original (numbers from the paper only) is grey, Phase 1 violet and Phase 2
+# green. Both pairs pass a colour-vision-deficiency check against the white background.
+condition_colours <- c(Mirror = "#2a78d6", Inverse = "#eb6834")
+study_colour <- function(study) case_when(study == "Original" ~ "#6b6b6b",
+                                          grepl("Phase 2", study) ~ "#008300", TRUE ~ "#6250d6")
+theme_report <- function(base_size = 13) {
+  theme_minimal(base_size = base_size) +
+    theme(panel.grid.minor = element_blank(), legend.position = "top", legend.justification = "left",
+          plot.title.position = "plot", strip.text = element_text(face = "bold", hjust = 0),
+          axis.title = element_text(colour = "grey25"))
+}
+# A small, fixed horizontal or vertical offset per participant (no random numbers, so every render
+# draws the same picture), to separate points with the same value.
+nudge <- function(id, step = 0.025) ((as.integer(factor(id)) %% 7) - 3) * step
+
+# Side-by-side figure: the effect size (d_z, 95% CI) of each study on the same axis, first study on
+# top. `raw` takes each study's difference scores (mirror − inverse), named like the studies: they are
+# drawn as small dots, each divided by the SD of that study's differences, so their mean is d_z. The
+# original reports only the effect size, so it has no dots. Dotted line: the original's estimate.
+comparison_plot <- function(..., raw = list()) {
   studies <- list(...)
   studies <- studies[!map_lgl(studies, ~ is.null(.x) || is.na(.x$d))]
+  pos <- set_names(rev(seq_along(studies)), names(studies))
   df <- imap_dfr(studies, ~ mutate(.x, Study = .y)) |>
-    mutate(Study = factor(Study, levels = rev(names(studies))),
-           label = sprintf("N = %d", as.integer(N)))
-  ggplot(df, aes(x = d, y = Study)) +
-    geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
-    geom_errorbar(aes(xmin = d_low, xmax = d_high), width = 0.15, orientation = "y") +
-    geom_point(size = 3, colour = "#1E6E76") +
-    geom_text(aes(label = label), vjust = -1.2, size = 3) +
-    labs(x = expression("Mirror − inverse affiliation, effect size " * d[z] * " (95% CI)"), y = NULL) +
-    theme_minimal(base_size = 12)
+    mutate(y = pos[Study],
+           label = sprintf("%s  ·  d_z = %.2f [%.2f, %.2f]  ·  N = %d  ·  %.0f%% higher for mirror",
+                           Study, d, d_low, d_high, as.integer(N), 100 * prop_mirror))
+  raw <- raw[names(raw) %in% names(studies) & !map_lgl(raw, is.null)]
+  dots <- imap_dfr(raw, ~ tibble(Study = .y, z = .x / sd(.x), id = seq_along(.x))) |>
+    mutate(y = pos[Study] - 0.25 + nudge(id, 0.03))
+  orig_d <- df$d[df$Study == "Original"]
+  ggplot() +
+    geom_vline(xintercept = 0, colour = "grey45", linewidth = 0.4) +
+    { if (length(orig_d)) geom_vline(xintercept = orig_d, colour = "#6b6b6b", linetype = "dotted", linewidth = 0.6) } +
+    { if (nrow(dots)) geom_point(data = dots, aes(x = z, y = y, colour = Study), size = 1.5, alpha = 0.45) } +
+    geom_linerange(data = df, aes(xmin = d_low, xmax = d_high, y = y, colour = Study), linewidth = 1.2) +
+    geom_point(data = df, aes(x = d, y = y, colour = Study), size = 3.8) +
+    geom_text(data = df, aes(x = -Inf, y = y + 0.3, label = label), hjust = -0.01, size = 3.6, colour = "grey15") +
+    scale_colour_manual(values = set_names(study_colour(names(studies)), names(studies)), guide = "none") +
+    scale_y_continuous(breaks = NULL, limits = c(0.6, length(studies) + 0.5)) +
+    labs(x = expression("Mirror − inverse affiliation, standardised (" * d[z] * " units)"), y = NULL) +
+    theme_report()
 }
 
 # Mean with a t-based 95% CI, for stat_summary().
@@ -323,21 +374,42 @@ mean_ci <- function(y) {
   data.frame(y = m, ymin = m - h, ymax = m + h)
 }
 
-# Within-participant figure: each participant's affiliation with the two bots, joined by a line,
-# with the condition means and 95% CIs.
+# Within-participant figure: each participant's affiliation with the two bots (dots), joined by a
+# line coloured by which bot they rated higher, with the condition means and 95% CIs beside the data.
 affiliation_plot <- function(d) {
-  long <- d$keep |>
-    select(participant_id, Mirror = mirror, Inverse = inverse) |>
+  k <- d$keep |>
+    mutate(Preference = case_when(diff > 0 ~ "mirror", diff < 0 ~ "inverse", TRUE ~ "same"),
+           jit = nudge(participant_id))
+  n_pref <- table(factor(k$Preference, levels = c("mirror", "inverse", "same")))
+  pref_labels <- c(mirror = sprintf("Rated mirror higher (%d)", n_pref[["mirror"]]),
+                   inverse = sprintf("Rated inverse higher (%d)", n_pref[["inverse"]]),
+                   same = sprintf("Same rating (%d)", n_pref[["same"]]))
+  long <- k |>
+    select(participant_id, Preference, jit, Mirror = mirror, Inverse = inverse) |>
     pivot_longer(c(Mirror, Inverse), names_to = "Condition", values_to = "Affiliation") |>
-    mutate(Condition = factor(Condition, levels = c("Mirror", "Inverse")))
-  ggplot(long, aes(x = Condition, y = Affiliation)) +
-    geom_line(aes(group = participant_id), colour = "grey75") +
-    geom_point(colour = "grey55") +
-    stat_summary(fun.data = mean_ci, colour = "#1E6E76", size = 0.8, linewidth = 1) +
+    mutate(Condition = factor(Condition, levels = c("Mirror", "Inverse")),
+           x = if_else(Condition == "Mirror", 1, 2) + jit)
+  means <- long |>
+    group_by(Condition) |>
+    summarise(mean_ci(Affiliation), .groups = "drop") |>
+    mutate(x = if_else(Condition == "Mirror", 0.68, 2.32),
+           tx = if_else(Condition == "Mirror", 0.6, 2.4), hj = if_else(Condition == "Mirror", 1, 0))
+  ggplot(long, aes(x = x, y = Affiliation)) +
+    geom_hline(yintercept = 0, colour = "grey80") +
+    geom_line(aes(group = participant_id, colour = Preference), alpha = 0.55, linewidth = 0.5) +
+    geom_point(aes(fill = Condition), shape = 21, colour = "white", size = 2.4, stroke = 0.3) +
+    geom_linerange(data = means, aes(x = x, ymin = ymin, ymax = ymax), inherit.aes = FALSE, linewidth = 1.1, colour = "grey15") +
+    geom_point(data = means, aes(x = x, y = y, fill = Condition), inherit.aes = FALSE, shape = 21, size = 4.2, colour = "grey15", stroke = 0.9) +
+    geom_text(data = means, aes(x = tx, y = y, label = sprintf("M = %.2f", y), hjust = hj), inherit.aes = FALSE, size = 3.6, colour = "grey15") +
+    scale_colour_manual(values = c(mirror = unname(condition_colours["Mirror"]), inverse = unname(condition_colours["Inverse"]), same = "grey60"),
+                        labels = pref_labels, breaks = names(pref_labels), name = NULL) +
+    scale_fill_manual(values = condition_colours, guide = "none") +
+    scale_x_continuous(breaks = 1:2, labels = c("Mirror chatbot", "Inverse chatbot"), limits = c(0.15, 2.85)) +
     scale_y_continuous(breaks = -2:2) +
-    coord_cartesian(ylim = c(-2, 2)) +   # zoom, so CIs reaching past ±2 are clipped, not dropped
-    labs(x = NULL, y = "Affiliation score (−2 to +2)") +
-    theme_minimal(base_size = 12)
+    coord_cartesian(ylim = c(-2.05, 2.05)) +   # zoom, so CIs reaching past ±2 are clipped, not dropped
+    labs(x = NULL, y = "Affiliation (mean of six items, −2 to +2)") +
+    theme_report() +
+    theme(panel.grid.major.x = element_blank())
 }
 
 phase1 <- read_phase(experiment_id)
@@ -378,19 +450,15 @@ bind_rows(
 
 ## Introduction
 
-I am interested in if an AI built from records of a person’s life till now can help them understand who they really are and even serve as a useful counterpart for future decisions, hence I found Castiello et al's research that discussed whether people’s psychological traits change their experience with AI interaction and decided to replicate Experiment 3 from it. This experiment specifically checked whether people feel a stronger connection to an AI chatbot when its conversational style feels similar to their own personality. In this study, 100 participants were invited to complete a 44-item Big Five personality questionnaire and then asked to chat with two versions of GPT-4.1, in which one version was prompted to reflect each participant’s personality profile while the other one reflected the opposite profile. Participants rated their feelings toward both chatbots after the conversations and were found out that the affiliation scores were higher for the personality-matched chatbot, t(99) = 5.66, p < .001.
+I am interested in whether an AI built from records of a person’s life can help them understand who they really are and even serve as a useful counterpart for future decisions, hence I decided to replicate Experiment 3 of Castiello et al.'s research which discussed whether people’s psychological traits change their interaction experience with AI chatbots. This experiment wanted to investigate if people feel more strongly connected to an AI chatbot when its conversational style reflects their own personality. In this study, 100 native English speakers were recruited from Prolific to first complete a 44-item Big Five personality questionnaire, then asked to chat with two versions of GPT-4.1, one prompted to reflect each participant’s personality profile while the other one opposite. Participants finally rated their feelings toward both chatbots after the conversations. The results approved the higher affiliation scores for the personality-matched chatbot, t(99) = 5.66, p < .001.
 
-For my replication, I recruited people on Prolific and had them complete the same Big Five questionnaire before chatting with two AI personas. I used the paper's personality-prompt structure to create the matched and opposite profile for each participant. Nevertheless, due to budget issues, I switched to Gemini through Google Cloud Vertex AI rather than GPT-4.1, and added a safety layer of behavioral safeguards following pilot testing. The key test I preregistered was a paired-samples t test that compared each participant’s affiliation score for the matched chatbot with their score for the opposite-profile chatbot. Pilot testing highlighted the challenge of eliciting distinct personality profiles while maintaining appropriate chatbot behavior and reliable response times. Because the replication used a different model and additional safeguards, these differences were documented for consideration when interpreting the replication’s findings.
-
-A possible extension would be either upgrading prompt and model that participants talk to or letting participants choose which chatbot to have an additional conversation with, which adds a behavioral choice to the original self-report ratings. I think the main challenge is to assign each chatbot with the correct personality prompt yet without exposing participants’ responses or the model API key. The authors used a different platform for the conversations, so I need to check that my implementation follows their procedure closely and describe any differences in the final report.
+For my replication, I repeated most of the processes with some adjustments. For example, due to lab conditions, I switched from ChatGPT to Gemini through Google Cloud Vertex AI. I also added a safety layer of behavioral safeguards following concerning behaviors in pilot testing, which also revealed the challenge of portraying distinct personality profiles while maintaining appropriate safety borderlines and reliable response times. The authors also used a different platform for the conversations, so I made sure that my implementation followed their procedure closely and described relevant differences in the final report. A possible extension would be first having participants rate the chatbot's personality on a separate survey, then force them to choose which chatbot to have an additional conversation with, so that we can find out if the chatbot performed as expected and if self-reporting is consistent with participants' real choices. 
 
 ## Methods
 
 ### Power analysis
 
-The original study reported a paired standardized effect of approximately d_z = 0.57. The table below illustrates the sample sizes required for 80%, 90%, and 95% power using a two-sided paired-samples t-test with α = .05 as well as calculations for a smaller effect of d_z = 0.30, which was the effect carried out by the original authors’ preregistered sample-size calculation. 
-
-In terms of comparisons, collecting 2.5 times the original sample inquired recruiting 250 participants, which was unrealistic given the budget constraints. Hence, after discussing with course instructor, I aimed at a target of 50 participants for my main study. Assuming 50 usable paired observations, this sample provided approximately 97.7% power for d_z = 0.57 and 54.8% power for d_z = 0.30. The effect detectable with 80% power was approximately d_z = 0.404. I anticipated that the final number of usable paired observations could be smaller after exclusions and missing outcomes, reducing statistical power.
+The original study reported a paired standardized effect of approximately d_z = 0.57. Due to budget constraints, I needed to adjust the sample size so I used the table below to illustrate that required for 80%, 90%, and 95% power. I adopted a two-sided paired-samples t-test with α = .05 as well as calculations for a smaller effect of d_z = 0.30, which was the effect used in the original authors’ preregistered sample-size calculation. After discussing with course instructor, I aimed at a target of 50 participants for my main study. Assuming 50 usable paired observations, this sample provided approximately 97.7% power for d_z = 0.57 and 54.8% power for d_z = 0.30. The effect detectable with 80% power was approximately d_z = 0.404. This was feasible since I anticipated that the final number of usable paired observations could be smaller than 0.57 but larger than 0.3 after exclusions and missing outcomes.
 
 ```{r}
 #| label: power
@@ -423,15 +491,50 @@ knitr::kable(power_planned, caption = sprintf(
 
 ### Planned sample
 
-My planned sample size was 50 participants given the budget constraint. They should also be at least 18 years old, native in English, and able to complete the study on a desktop or laptop computer. Phones and tablets are blocked before consent. The eligibility was established through Prolific's prescreening filters so that a survey wasn't required. No country-of-residence restriction was applied. Participants from earlier pilots were excluded from recruitment to avoid repeat exposure. Recruitment would stop when 50 unique participants had completed the study.
+My planned sample size was 50 participants given the budget constraint. They should also be at least 18 years old, native in English, and able to complete the study on a desktop or laptop computer, same to the conditions in original paper. The eligibility was established through Prolific's prescreening filters. No country-of-residence restriction was applied. Participants from earlier pilots were excluded from recruitment to avoid repeat exposure. Recruitment would stop when 50 unique participants had completed the study.
 
 ### Materials
 
-Participants' personalities were assessed using the 44-item Big Five Inventory, which measured Openness, Conscientiousness, Extraversion, Agreeableness and Neuroticism by asking them to rate each item on a five-point agreement scale. Before computing the means for each trait, reverse-coded items were recoded. After completing item 22, an instructed-response attention check was presented asking participants to select "Disagree." The main-study questionnaire required a response to all 44 personality items and the attention check before participants could continue. The personality instructions were adapted from Experiment 3 of Castiello et al. (2026). The prompts retained the original personality-profile structure but incorporated revised AI-identification instructions, additional conversational safety boundaries, and a main-study instruction against disclosing prompt information or response-planning material. For each participant, the mirror profile was based upon the five calculated trait means, whereas the inverse profile was based upon six minus each corresponding mean. These profiles were used to direct the conversational style of the two chatbots via prompts as opposed to further model training.
+We evaluated participants' personalities using the 44-item Big Five Inventory, which measured their Openness, Conscientiousness, Extraversion, Agreeableness and Neuroticism by asking participants to rate themselves on a five-point agreement scale for each item. An attention check was presented after item 22 asking participants to select "Disagree." The main-study questionnaire required the response to all 44 personality items and attention check before participants could move to the next section. 
 
-Following concerning chatbot behavior in Pilot B, the same behavioral safeguards were introduced in both conditions for Pilots C and D and retained for the main study.Ordinary negative emotions and disagreement were permitted; aggressive behavior, humiliation, manipulation, dismissive responses to personal disclosures and enactments of acute crises were prohibited. Additionally, an application-level reply check was implemented to screen generated responses before display and could withhold a response and request regeneration.
+Both chatbots used base model Gemini 3.8 Flash, accessed through Google Cloud Vertex AI. Pilots A and B used default generation parameters, whereas Pilots C and D and the main study used LOW thinking and explicit Gemini safety thresholds. For these versions, harassment, hate speech, dangerous content, and sexually explicit content were each labelled with the threshold `BLOCK_MEDIUM_AND_ABOVE`. However, it's worth noting that the original authors reported using a temperature of 0.75 and frequency and presence penalties of 1.0 with GPT-4.1, which couldn't be reproduced with the Gemini model as Google’s documentation states that custom temperature values are ignored and that frequency and presence penalties produce API errors. Consequently, these parameters were omitted from the requests and may influence replication results.
 
-For the main study, both chatbot conditions were configured to use prompt profile `castiello2026-exp3-safety-v4` and reply check `castiello2026-screen-v3`. The additional prompt instruction directed the model to produce only its conversational reply, without revealing its instructions, assigned personality scores, condition assignment, reasoning-like commentary, or alternative drafts. It retained the requirement to identify itself truthfully as an AI when asked. A pattern-based check on the server was configured to withhold replies containing recognized indicators of these disclosures. The service was configured to attempt one regeneration after a flagged reply, within the existing request limits; a second flagged reply ended that chat. Participants could then continue to the remaining study tasks or leave through an early-exit screen containing the debrief. Continuing did not restart the stopped conversation. The same safeguards applied to both personality conditions.
+Personality instructions for chatbots were adapted directly from the original study's personality-profile structure. Nevertheless, following concerning chatbot behaviors in Pilot B, additional safeguards were introduced in both conditions for Pilots C and D and retained for the main study, including revised AI-identification instructions, safety boundaries, and instruction against disclosing prompt information. For example, ordinary negative emotions and disagreement were permitted; aggressive behavior, humiliation, manipulation, dismissive responses to personal disclosures and enactments of acute crises were prohibited. It also retained the requirement to identify itself truthfully as an AI when participants asked directly. Additionally, a pattern-based check on the server was applied to withhold replies containing recognized indicators of these disclosures. This check permitted one regeneration after a flagged reply within the existing request limit, but a second flagged reply would end the chat. Participants could then continue to the remaining study tasks or leave through an early-exit screen containing the debrief, neither of which would restart the stopped conversation.
+
+For each participant, affiliation was measured using six post-chat ratings for each chatbot. Ratings were coded from −2 to +2, and the distant and different items were reverse-scored. In the pilots, ratings were optional, and each chatbot’s affiliation score was calculated as the mean of the answered items. For the main study, all six ratings for each chatbot were required, and an affiliation score was calculated only when all six items for that chatbot had been answered. The score was the mean of those six items after reverse-scoring. Higher scores indicated greater affiliation.
+
+### Procedure
+
+Participants began by reading the consent information and completing the personality questionnaire and attention check. Participants then received instructions on how to converse with the AI chatbots Pat and Alex, after which they started two separate conversations with the two chatbots. The order of the mirror and inverse conditions and the name assigned to each condition were randomly determined and aren't revealed to participants' knowledge. The conversations were initiated by chatbots and consisted of 24 visible messages (12 from the chatbot and 12 from the participant) that ended after the participant's last message, which was revised later to allow participants to stop and leave anytime. Delayed replies were accompanied by waiting messages, whereas unrecoverable technical failures led to an early-exit screen with the saving status, study explanation, and researcher contact information. Participants who voluntarily left during the chats also received an early-exit debrief. Following both conversations, participants were asked to rate upon affiliation for each chatbot and could choose whether to answer demographic questions. Participants were finally debriefed regarding the personality manipulation and clicked "Finish" to submit their responses. Nevertheless, we counted anyone who reached the ratings section as completed.
+
+### Analysis plan
+
+Before analyzing affiliation scores, I reviewed all participant-visible chatbot replies for signs of instruction disclosures, towards which common discussion of personality and truthful identification as AI didn't count. I then flagged and reported the number affected and repeated the primary paired comparison after excluding these participants as a sensitivity analysis.
+
+**Key analysis of interest.** The main analysis used a two-sided paired-samples t-test (α = .05) to assess whether there was a difference in participants' affiliation with the mirror chatbot versus their affiliation with the inverse chatbot. Each participant's difference score was computed by subtracting their affiliation with the inverse chatbot from their affiliation with the mirror chatbot; therefore, positive scores represented higher levels of affiliation with the mirror chatbot and negative scores the inverse. The statistics included the mean difference, t-statistic, degrees of freedom, p-value, and paired standardized effect size d_z along with its 95% confidence interval. In addition, I conducted a Wilcoxon signed-rank test as a secondary robustness check.
+
+**Exclusions.** Participants were excluded from the primary paired analysis if either conversation was not completed in full, including chats shortened by an automatic stop, withdrawal, or technical failure. They were also excluded if their mean scores were exactly 3 on all five personality dimensions. Missing responses were not imputed. Demographic and feedback questions were optional and were not used to determine analysis eligibility.
+
+### Differences from the original study
+
+| Aspect | Original study | This replication | Expected to matter? |
+|---|---|---|---|
+| Language model | GPT-4.1 | Gemini 3.8 Flash | Possibly, since models differed in personality expression, conversational behavior, and reactions to sensitive topics, this could affect the actual manipulation and affiliation ratings. |
+| Study platform | Generative Studio X | A jsPsych study hosted on GitHub Pages, with a Firebase backend | Interface features and response delays might slightly affect the experience, but not the affiliation. |
+| Sample size | 100 participants | 50 participants | Only for power and precision. With 50 analysable pairs, power was approximately 97.7% for d_z = 0.57 but 54.8% for d_z = 0.30. |
+| Attention check | The original preregistration mentions “anti-AI attentional checks,” without specific wording there. | I designed an instructed-response item after BFI item 22 asking participants to select “Disagree.” | Unlikely. |
+| Starting the conversation | The opener “Hey, how are you?” was hardcoded, according to author correspondence. | A hidden instruction requested a brief, casual greeting, which the model generated separately for each conversation. | Unlikely, though the opening may affect perceived familiarity. |
+| Conversation length | The paper reported 24 conversational turns; the authors subsequently clarified that most conversations contained 26, with some containing 24 or 25. | Each chat contained 24 visible messages, counting both speakers and including the bot’s opener. The hidden instruction was excluded. | Maybe, as this was my interpretation of “turn”; exact equivalence to the original counting convention remained unverified. |
+| Generation settings | Temperature = 0.75, frequency penalty = 1.0, and presence penalty = 1.0, according to author correspondence. | These parameters weren't executable because Gemini 3.8 Flash ignored custom temperature values and rejected frequency and presence penalties. The revised implementation used LOW thinking; top-p and maximum output tokens were not explicitly configured. | Possibly. Differences in generation settings could affect conversational variability, repetition, personality expression, and response time. Their effects on affiliation were unknown. |
+| Personality instructions and AI identity | The original personality prompt included an instruction on never to reveal that the chatbot was an AI, although participants were informed that they were interacting with AI. | The revised prompt described a fictional personality and required truthful identification as an AI when asked. Additional behavioral boundaries applied equally to both personality conditions. | Unlikely, though the changes may affect perceived authenticity and how strongly the chatbots expressed their assigned personalities. |
+| Reply screening and safety stops | Equivalent application-level reply screening and safety-stop procedures had not been established from the available original-study materials. | My revised implementation retained behavioral safety screening and added an instruction against disclosing prompt information, together with a pattern-based check for instruction text, assigned trait scores, condition assignments, and reasoning-like or draft material. Recognized disclosures were withheld and regenerated within the existing limits. | Possibly. These safeguards may reduce exposure to information about the manipulation, but regeneration and chat termination could affect response time and conversational exposure. Their effects on personality expression and affiliation were unknown, and disclosures that the check didn't recognize may still reach participants. |
+
+### Pilot results
+
+Four pilots paved the path to the main replication. Pilot A evaluated the initial implementation through non-naive testing, while Pilot B tested it with five naive participants. Review of the Pilot B transcripts identified concerning behavior in two inverse-personality conversations. One chatbot became hostile and dismissed a participant’s sensitive disclosure, while another was accusatory and described anxiety symptoms. More seriously, one chatbot message claimed that itself was experiencing a panic attack. After consultation with the course’s protocol director, the study was suspended to revise the procedure. The revised prompts retained the mirror and inverse personality profiles but added the same behavioral boundaries to both conditions. These instructions permitted ordinary negative emotions and disagreement while prohibiting aggression, humiliation, manipulation, and the enactment of acute crises. Additional safeguards included response screening, regeneration of withheld replies, safety-stop procedures, and early-exit debriefing. These changes were intended to reduce problematic interactions while preserving personality differences, although their effects on trait expression and affiliation were not established.
+
+Following concerning chatbot behaviors in Pilot B, Pilot C was introduced that included two informed testers and a separate researcher walkthrough. Neither tester’s session recorded a safety flag or safety stop, and both rated the mirror chatbot more highly than the inverse chatbot, with a mean paired difference of 1.58. Pilot D then recruited ten naive participants using the revised prompts, response screening, and longer reply deadline. All ten completed the process thoroughly and reached the debrief, and none was excluded from the reported pilot analysis. No participant left early or experienced a safety stop. Three candidate replies were withheld and replaced on the next attempt: one was blocked by the provider’s safety filter, and two were false positives from the study’s response check. Transcript review of Pilot D did not identify a recurrence of the severe hostility observed in Pilot B; however, one participant received a reply containing reasoning-like text, prompt instructions, the chatbot’s assigned trait scores, and draft responses. The response check did not intercept this disclosure, and the participant explicitly noticed it. This participant remained in the reported pilot analysis. This observation motivated the additional instruction and screening rules introduced for the main study. Local tests using scripted responses verified that the revised check detected the known disclosure pattern and allowed the ordinary responses included in the tests. Because the rules were developed using the observed disclosure, detecting that example does not provide independent evidence of general effectiveness. Mean affiliation was 1.28 for the mirror chatbot (SD = 0.52) and 0.00 for the inverse chatbot (SD = 0.92). The mean paired difference was 1.28, t(9) = 3.87, p = .004, with d_z = 1.22, 95% CI [0.40, 2.04]. Nine of ten participants rated the mirror chatbot more highly. 
+
 
 | Study | Prompt profile | Reply check |
 |---|---|---|
@@ -439,55 +542,7 @@ For the main study, both chatbot conditions were configured to use prompt profil
 | Pilots C and D | `castiello2026-exp3-safety-v3` | `castiello2026-screen-v2` |
 | Main study | `castiello2026-exp3-safety-v4` | `castiello2026-screen-v3` |
 
-: Prompt and reply-check versions by study.
-
-Both chatbots were based upon Gemini 3.8 Flash, accessed through Google Cloud Vertex AI. Pilots A and B did not explicitly configure generation parameters, whereas Pilots C and D and the main study used LOW thinking and explicit Gemini safety thresholds. For these versions, harassment, hate speech, dangerous content, and sexually explicit content were each configured with the threshold `BLOCK_MEDIUM_AND_ABOVE`. In correspondence, the original authors reported using a temperature of 0.75 and frequency and presence penalties of 1.0 with GPT-4.1. These settings could not be reproduced on the selected Gemini model: Google’s documentation states that custom temperature values are ignored and that frequency and presence penalties produce API errors. Consequently, these parameters were omitted from the requests.
-
-Each chatbot had its own separate conversation history. The personality instructions were provided to each chatbot via the backend rather than presented as participant instructions. A hidden startup instruction ("Begin this first conversation with a brief, casual greeting. Do not refer to previous conversations or shared experiences with this person") was used to begin every conversation.
-
-Affiliation was measured using six post-chat ratings for each chatbot. Ratings were coded from −2 to +2, and the distant and different items were reverse-scored. In the pilots, ratings were optional, and each chatbot’s affiliation score was calculated as the mean of the answered items. For the main study, all six ratings for each chatbot were required, and an affiliation score was calculated only when all six items for that chatbot had been answered. The score was the mean of those six items after reverse-scoring. Higher scores indicated greater affiliation.
-
-### Procedure
-
-Participants began by reading the consent information and stating if they wish to participate. Then they completed the personality questionnaire and attention check, after which they received instructions on how to converse with the AI chatbots. Participants were reminded that they were conversing with AI chatbots called Pat and Alex; however, the relationship between each chatbot and the personality conditions wasn't revealed prior to rating.
-
-Participants then started two separate conversations with the two chatbots. The order of the mirror and inverse conditions and the name assigned to each condition were randomly determined. The conversations were initiated by chatbots and consist of 24 visible messages (12 from the chatbot and 12 from the participant) that concluded after the participant's last message. In the revised procedure, participants could stop and leave during either conversation. Delayed replies were accompanied by waiting messages, and unrecoverable technical failures led to an early-exit screen with the saving status, study explanation, and researcher contact information. Participants who voluntarily left during the chats also received an early-exit debrief.
-
-Following both conversations, participants were asked to provide affiliation ratings for each chatbot and chose to answer demographic questions. Participants were then debriefed regarding the personality manipulation and clicked "Finish" to submit their responses. Nevertheless, the code counts as completed anyone who reached the ratings.
-
-### Analysis plan
-
-Before examining the main-study affiliation outcomes, I reviewed all participant-visible chatbot replies for disclosures of instructions, assigned personality scores, condition assignments, or commentary explicitly presented as response planning or alternative drafts. Ordinary discussion of personality and truthful identification as an AI didn't count as disclosures. Otherwise eligible participants who encountered a confirmed disclosure remained in the primary analysis and were flagged. I reported the number affected and repeated the primary paired comparison after excluding these participants as a sensitivity analysis.
-
-**Key analysis of interest.** The main analysis employed a two-sided paired-samples t-test (α = .05) to assess whether there was a difference in participants' affiliation with the mirror chatbot versus their affiliation with the inverse chatbot.
-
-Each participant's difference score was computed by subtracting their affiliation with the inverse chatbot from their affiliation with the mirror chatbot; therefore, positive scores represented higher levels of affiliation with the mirror chatbot. I provided the mean difference, t-statistic, degrees of freedom, p-value, and paired standardized effect size d_z along with its 95% confidence interval. In addition, I conducted a Wilcoxon signed-rank test as a secondary robustness check.
-
-**Exclusions.** Participants were excluded from the primary paired analysis if either conversation was not completed in full, with 24 visible messages per conversation, including chats shortened by an automatic stop, withdrawal, or technical failure.Participants were also excluded if they failed or did not answer the attention check, had mean scores of exactly 3 on all five personality dimensions, left any of the 44 BFI items unanswered, or did not answer all six affiliation items for each chatbot. Missing item-completion counts were treated as incomplete. A usable affiliation score for both chatbots was required for the paired comparison, and missing affiliation outcomes were reported separately from the other exclusion reasons. Missing responses were not imputed. Demographic and feedback questions were optional and were not used to determine analysis eligibility.
-
-### Differences from the original study
-
-| Aspect | Original study | This replication | Expected to matter? |
-|---|---|---|---|
-| Language model | GPT-4.1 | Gemini 3.8 Flash | Possibly, as models differ in personality expression, conversational behavior, and responses to sensitive topics, this can affect the actual manipulation and affiliation ratings. |
-| Study platform | Generative Studio X | A jsPsych study hosted on GitHub Pages, with a Firebase backend | Interface features and response delays may slightly affect the experience. |
-| Sample size | 100 participants | 50 participants | Only for power and precision. With 50 analysable pairs, power is approximately 97.7% for d_z = 0.57 but 54.8% for d_z = 0.30. |
-| Attention check | The original preregistration mentions “anti-AI attentional checks,” without specific wording there. | I designed an instructed-response item after BFI item 22 asking participants to select “Disagree.” | Unlikely, though the checks may identify different kinds of inattentive responding. |
-| Starting the conversation | The opener “Hey, how are you?” was hardcoded, according to author correspondence. | A hidden instruction requested a brief, casual greeting, which the model generated separately for each conversation. | Unlikely, though the opening may affect perceived familiarity. |
-| Conversation length | The paper reported 24 conversational turns; the authors subsequently clarified that most conversations contained 26, with some containing 24 or 25. | Each chat contained 24 visible messages, counting both speakers and including the bot’s opener. The hidden instruction was excluded. | Maybe, as this was my interpretation of “turn”; exact equivalence to the original counting convention remained unverified. |
-| Generation settings | Temperature = 0.75, frequency penalty = 1.0, and presence penalty = 1.0, according to author correspondence. | These parameters were omitted because Gemini 3.8 Flash ignores custom temperature values and rejects frequency and presence penalties. The revised implementation used LOW thinking; top-p and maximum output tokens were not explicitly configured. | Possibly. Differences in generation settings may affect conversational variability, repetition, personality expression, and response time. Their effects on affiliation are unknown. |
-| Personality instructions and AI identity | The original personality prompt included an instruction never to reveal that the chatbot was an AI, although participants were informed that they were interacting with AI. | The revised prompt described a fictional personality and required truthful identification as an AI when asked. Additional behavioral boundaries applied equally to both personality conditions. | Unlikely, though the changes may affect perceived authenticity and how strongly the chatbots express their assigned personalities. |
-| Reply screening and safety stops | Equivalent application-level reply screening and safety-stop procedures have not been established from the available original-study materials. | My revised implementation retained behavioral safety screening and added an instruction against disclosing prompt information, together with a pattern-based check for instruction text, assigned trait scores, condition assignments, and reasoning-like or draft material. Recognized disclosures are withheld and regenerated within the existing limits. | Possibly. These safeguards may reduce exposure to information about the manipulation, but regeneration and chat termination can affect response time and conversational exposure. Their effects on personality expression and affiliation are unknown, and disclosures that the check does not recognize may still reach participants. |
-
-### Pilot results
-
-Four pilots informed the development of the main replication. Pilot A evaluated the initial implementation through non-naive testing, and Pilot B tested that implementation with five naive participants. Following concerning chatbot behaviors in Pilot B, Pilot C evaluated revised safeguards with informed testers, and Pilot D evaluated the revised procedure with ten naive participants. 
-
-Review of the Pilot B transcripts identified concerning behavior in two inverse-personality conversations. One chatbot became hostile and dismissed a participant’s sensitive disclosure, while another was defensive and accusatory and described anxiety symptoms. More seriously, one chatbot message claimed that it was experiencing a panic attack. After consultation with the course’s protocol director, the study was suspended while the procedure was revised. The revised prompts retained the mirror and inverse personality profiles but added the same behavioral boundaries to both conditions. These instructions permitted ordinary negative emotions and disagreement while prohibiting aggression, humiliation, manipulation, and the enactment of acute crises. Additional safeguards included response screening, regeneration of withheld replies, safety-stop procedures, and early-exit debriefing. These changes were intended to reduce problematic interactions while preserving personality differences, although their effects on trait expression and affiliation were not established.
-
-Hence, Pilot C was introduced that included two informed testers and a separate researcher walkthrough. Neither tester’s session recorded a safety flag or safety stop, and both rated the mirror chatbot more highly than the inverse chatbot, with a mean paired difference of 1.58. Pilot D recruited ten naive participants using the revised prompts, response screening, and longer reply deadline. All ten completed the process thoroughly and reached the debrief, and none was excluded from the reported pilot analysis. No participant left early or experienced a safety stop. Three candidate replies were withheld and replaced on the next attempt: one was blocked by the provider’s safety filter, and two were false positives from the study’s response check. 
-
-Transcript review of Pilot D did not identify a recurrence of the severe hostility observed in Pilot B; however, one participant received a reply containing reasoning-like text, prompt instructions, the chatbot’s assigned trait scores, and draft responses. The response check did not intercept this disclosure, and the participant explicitly noticed it. This participant remained in the reported pilot analysis. This observation motivated the additional instruction and screening rules introduced for the main study. Local tests using scripted responses verified that the revised check detected the known disclosure pattern and allowed the ordinary responses included in the tests. Because the rules were developed using the observed disclosure, detecting that example does not provide independent evidence of general effectiveness. Mean affiliation was 1.28 for the mirror chatbot (SD = 0.52) and 0.00 for the inverse chatbot (SD = 0.92). The mean paired difference was 1.28, t(9) = 3.87, p = .004, with d_z = 1.22, 95% CI [0.40, 2.04]. Nine of ten participants rated the mirror chatbot more highly. 
+Prompt and reply-check versions by study.
 
 ```{r}
 #| label: pilot-results
@@ -561,7 +616,7 @@ imap_dfr(pilot_list, function(d, id) {
          `Mean difference` = if (!is.null(r)) sprintf("%.2f", r$mean_diff) else "",
          `t (df), p` = if (ok) sprintf("%.2f (%d), %s", r$t, as.integer(r$df), r$p_text) else "",
          `d_z [95% CI]` = if (ok) sprintf("%.2f [%.2f, %.2f]", r$d, r$d_low, r$d_high) else "",
-         `Wilcoxon V, p` = if (ok) sprintf("%g, %s", r$V, format.pval(r$p_wilcox, digits = 2, eps = 0.001)) else "",
+         `Wilcoxon V, p` = if (ok) sprintf("%g, %s", r$V, fmt_p(r$p_wilcox)) else "",
          `Higher for mirror` = if (nrow(k)) sprintf("%d of %d", sum(k$diff > 0), nrow(k)) else "",
          `Mirror first / inverse first` = sprintf("%d / %d", sum(k$order %in% "mirror-first"), sum(k$order %in% "inverse-first")))
 }) |>
@@ -615,14 +670,9 @@ if (file.exists(file.path(pc_dir, "participants.csv"))) {
 
 ### Methods addendum (post data collection)
 
-::: {.callout-tip icon=false}
-## Guidance
-
-Leave this section out of the version you preregister. After data collection, report the
-actual sample and any deviation from the plan above.
-:::
-
 #### Actual sample
+
+We recruited participants through Prolific on 1 November 2026 and data collection began the next day. Fifty participants completed the study, among whom three were excluded according to the rules previously set, resulting in 47 participants for the final paired analysis. Their mean age was 36.3 years (SD = 10.9, range = 18–72); 22 identified as women, 24 as men, and one as non-binary. Forty-six participants reported English as their first language. Among the analysed participants, 26 encountered the inverse chatbot first and 21 encountered the mirror chatbot first.
 
 ```{r}
 #| label: no-data-notice
@@ -751,41 +801,55 @@ demo <- trials |>
   mutate(resp = map(response, ~ fromJSON(.x))) |>
   transmute(
     participant_id,
-    age    = map_dbl(resp, ~ as.numeric(.x$age %||% NA)),
-    gender = map_chr(resp, ~ as.character(.x$gender %||% NA))
+    age     = map_dbl(resp, ~ suppressWarnings(as.numeric(.x$age %||% NA))),
+    gender  = map_chr(resp, ~ as.character(.x$gender %||% NA)),
+    english = map_lgl(resp, ~ as.logical(.x$native_english %||% NA))
   )
 
 if (nrow(demo) > 0) {
-  demo |>
-    summarise(N = n(), `Mean age` = round(mean(age, na.rm = TRUE), 1),
-              `SD age` = round(sd(age, na.rm = TRUE), 1),
-              `Age not given` = sum(is.na(age))) |>
-    knitr::kable(caption = "Age of the analysed sample.")
+  # The analysed sample beside the original's (original_demo, with the original study's numbers).
+  # The questions were optional: anyone who skipped one, chose "Prefer not to say" or described
+  # their gender in their own words is counted under "Other or not given"; nothing is imputed.
+  # "English first language" counts "Yes" to "Is English your first language?" (asked from the
+  # main study on; recruitment also used Prolific's first-language filter).
+  demo_row <- function(sample, n, ages, women, men, nonbinary, english) tibble(
+    Sample = sample, N = n,
+    `Age, M (SD)` = if (length(ages) > 1) sprintf("%.2f (%.2f)", mean(ages), sd(ages)) else "–",
+    `Age range` = if (length(ages) > 0) sprintf("%g–%g", min(ages), max(ages)) else "–",
+    `Age not given` = n - length(ages),
+    Women = women, Men = men, `Non-binary` = nonbinary,
+    `Other or not given` = n - women - men - nonbinary,
+    `English first language` = sprintf("%d of %d", english, n)
+  )
+  ages <- demo$age[!is.na(demo$age)]
+  bind_rows(
+    with(original_demo, demo_row("Original (Castiello et al.)", N, ages = numeric(0), women, men,
+                                 nonbinary, english)) |>
+      mutate(`Age, M (SD)` = sprintf("%.2f (%.2f)", original_demo$age_m, original_demo$age_sd),
+             `Age range` = sprintf("%g–%g", original_demo$age_min, original_demo$age_max),
+             `Age not given` = original_demo$age_missing),
+    demo_row("This replication (analysed)", nrow(keep), ages, sum(demo$gender %in% "Woman"),
+             sum(demo$gender %in% "Man"), sum(demo$gender %in% "Non-binary"),
+             sum(demo$english %in% TRUE))
+  ) |>
+    knitr::kable(caption = paste("Sample characteristics: the original study (Methods, p. 2) and",
+                                 "this replication's analysed sample."))
 }
 ```
 
 #### Deviations from the preregistered plan
 
-::: {.callout-tip icon=false}
-## Guidance
-
-Any deviation from the preregistered plan above, or "None". Changes made after seeing data
-belong here even if they seem minor, together with the reason.
-:::
+Although recruitment applied Prolific’s native-English prescreening filter, one participant reported that English was not their first language. The disclosure review was assisted by Claude Code with three AI subagents, whereas the preregistered plan described a review conducted solely by the researcher. Finally, sentiment and positivity analyses were added after the main-study outcomes had been examined, so they weren't specified in the preregistration. These analyses were identified as exploratory, and their methods and results were presented in the Exploratory analyses section.
 
 ## Results
 
 ### Data preparation
 
-::: {.callout-tip icon=false}
-## Guidance
-
-Data preparation follows the analysis plan. Loading and exclusions are done by the shared
-analysis code under Key statistics (open "Show the analysis code"). Describe anything you did to
-the data beyond that.
-:::
+Analysis files used pseudonymous participant identifiers and excluded conversation transcripts and free-text feedback, keeping Prolific identifiers and the information linking them to study records private. Personality and affiliation scores were calculated, and participant exclusions were applied using the preregistered analysis code. Consequently, no additional participants were removed for the disclosure sensitivity analysis. For the exploratory sentiment analyses, Gemini 3.8 Flash classified individual messages, and the resulting labels were linked to the corresponding participant, chatbot condition, and speaker. The sentiment file prepared for sharing contained derived labels and message metadata without conversation text. 
 
 ### Confirmatory analysis
+
+Participants reported greater affiliation with the mirror chatbot (M = 0.74, SD = 0.78) than with the inverse chatbot (M = −0.25, SD = 1.07). The mean within-participant difference was 0.99 points on the affiliation scale, 95% CI [0.58, 1.39]. The preregistered two-sided paired-samples t-test supported the predicted mirror advantage by t(46) = 4.90, p < .001, with a paired standardized effect size of d_z = 0.71, 95% CI [0.39, 1.03]. The Wilcoxon signed-rank test also supported a difference between conditions (p < .001). Descriptively, 32 of the 47 participants (68%) reported higher affiliation with the mirror chatbot. Because the disclosure review identified no confirmed prompt disclosures, the disclosure sensitivity analysis retained the same participants and produced the same result as the primary analysis. The secondary regression analysis examined whether the affiliation difference between conditions varied with personality-profile distance. The condition-by-distance interaction was not statistically significant (p = .33), providing no clear evidence that the mirror advantage varied with this distance measure in the present sample.
 
 ```{r}
 #| label: confirmatory
@@ -835,7 +899,7 @@ if (!phase1$disclosure_reviewed) {
              `t (df)` = if (ok) sprintf("%.2f (%d)", s$t, as.integer(s$df)) else "not run",
              p = if (ok) s$p_text else "not run",
              `d_z [95% CI]` = if (ok) sprintf("%.2f [%.2f, %.2f]", s$d, s$d_low, s$d_high) else "not run",
-             `Wilcoxon p` = if (ok) format.pval(s$p_wilcox, digits = 2, eps = 0.001) else "not run")
+             `Wilcoxon p` = if (ok) fmt_p(s$p_wilcox) else "not run")
     }
     print(knitr::kable(bind_rows(disclosure_row("Primary", p1),
                                  disclosure_row("Excluding confirmed disclosures", paired_stats(list(keep = filter(keep, !disclosure_confirmed))))),
@@ -846,15 +910,7 @@ if (!phase1$disclosure_reviewed) {
 
 ### Replication assessment
 
-::: {.callout-tip icon=false}
-## Guidance
-
-Judge the replication on effect sizes, not only on whether the key test is significant. Compare
-the replication estimate and its interval with the original: does the interval exclude zero, and
-does it include the original estimate? A significant result much smaller than the original, or
-a non-significant result whose interval still includes the original effect, are both
-informative and should be reported as such (Experimentology §3.2).
-:::
+The replication supported the original finding that participants reported greater affiliation with the mirror chatbot. The estimated effect was d_z = 0.71, 95% CI [0.39, 1.03], compared to the original study’s d_z = 0.57, 95% CI [0.36, 0.78]. The replication confidence interval excluded zero and included the original point estimate, indicating a positive effect compatible with the magnitude originally reported. Although the replication point estimate was numerically larger, this alone didn't establish a stronger underlying effect. Descriptively, 68% of participants rated the mirror chatbot more highly, while original study reported 64%. The wider confidence interval indicated lower precision in the replication, since it analysed 47 participants compared to 100 in the original study.
 
 ```{r}
 #| label: comparison
@@ -892,67 +948,40 @@ if (!is.null(rep) && !is.na(rep$d)) {
 }
 ```
 
-::: {.callout-tip icon=false}
-## Guidance: show the original next to your replication
-
-**Every report should have a figure that puts the original finding and your replication side by
-side.** It is the single most informative thing in a replication report: a reader can see at a
-glance whether the effect came back, and how its size compares. Make it however you can, in
-roughly this order of preference:
-
-1. **Replot both from numbers.** Enter the original's summary statistics (means or proportions,
-   with SDs, SEs or CIs, and Ns) in the original-study chunk at the top of this file, and plot
-   them on the same axes as yours. That is what the demo figure below does.
-2. **Replot the original from its data**, if the authors shared it or it is in an open
-   repository, using exactly the same plotting code as for your own data.
-3. **Show the original figure as an image** next to yours if neither is possible. Save a
-   screenshot of it, for example as `writeup/images/original-figure.png`, and lay the two out
-   in columns:
-
-   ````markdown
-   ::: {layout-ncol=2}
-   ![Original: Tversky & Kahneman (1981), Figure 1](images/original-figure.png)
-
-   ```{{r}}
-   # your replication plot here
-   ```
-   :::
-   ````
-
-Whichever you choose, use the same measure, scale, condition order and error-bar meaning for
-both panels, label which is which, and cite the source of the original values or figure in the
-caption. If the original reported no variability, say so rather than leaving it out silently.
-:::
-
 ```{r}
 #| label: fig-comparison
 #| eval: !expr have_data
-#| fig-cap: !expr paste0("Mirror minus inverse affiliation as an effect size (d_z, 95% CI), original study and ", phase1_label, ". The original values are from the paper's text (p. 7); it does not report the condition means.")
-#| fig-width: 7
-#| fig-height: 2.5
-do.call(comparison_plot, setNames(list(original, paired_stats(phase1)), c("Original", phase1_label)))
-# To show the original's Fig. 4A next to this (the original reports no means to replot), save a
-# screenshot as writeup/images/original-figure.png and lay the two out with
-# ::: {layout-ncol=2} as described in the guidance box above.
+#| fig-cap: !expr 'paste0("Mirror minus inverse affiliation as an effect size, original study and ", phase1_label, ". Large points and bars: d_z with its 95% CI. Small dots: each participant''s difference score divided by the SD of the difference scores, so their mean is d_z. The original''s values are from the paper''s text (p. 7); it reports no condition means or individual data, so it has no dots. Dotted line: the original estimate; solid line: no difference.")'
+#| fig-width: 8
+#| fig-height: 3.2
+do.call(comparison_plot, c(setNames(list(original, paired_stats(phase1)), c("Original", phase1_label)),
+                           list(raw = setNames(list(keep$diff), phase1_label))))
 ```
+
+<!-- The original's Fig. 4A beside this study's affiliation figure, on the same −2 to +2 scale. The
+paper reports no condition means or participant-level data, so its figure is shown as published
+(writeup/original-figure.png, cropped from Fig. 4) rather than replotted. The article is CC BY 4.0,
+which allows reuse with credit, a licence link and a note of changes: all three are in the caption. -->
+::: {layout="[[38,62]]" layout-valign="bottom"}
+![Original study (N = 100), as published: affiliation by condition, box plots (median and interquartile range). Panel A of Fig. 4 in Castiello et al. (2026), cropped; reused under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).](original-figure.png){#fig-original fig-alt="Box plots from the original paper: affiliation is higher for the mirror chatbot (median about +1) than for the inverse chatbot (median about 0), marked p < .001."}
 
 ```{r}
 #| label: fig-affiliation
 #| eval: !expr have_data
-#| fig-cap: !expr 'paste0(phase1_label, ": each participant''s affiliation with the mirror and the inverse chatbot (grey lines), with condition means and 95% CIs.")'
-#| fig-width: 5
-#| fig-height: 4
+#| fig-cap: !expr 'paste0(phase1_label, ": each analysed participant''s affiliation with the mirror and the inverse chatbot (small dots), joined by a line coloured by which chatbot they rated higher. Large points beside the data: condition means with 95% CIs.")'
+#| fig-width: 6.5
+#| fig-height: 4.8
 if (nrow(keep) > 0) affiliation_plot(phase1)
 ```
+:::
 
 ### Exploratory analyses
 
-::: {.callout-tip icon=false}
-## Guidance
+Exploratory analyses examined conversation order, engagement, and chatbot behaviour. There was no clear evidence that encountering the mirror chatbot first predicted the mirror–inverse affiliation difference (b = −0.39, p = .34). Among the 47 analysed participants, mirror conversations had a longer median duration than inverse conversations (10.8 versus 9.5 minutes). However, participants typed more characters during inverse conversations: the median was 788 characters, compared with 691 during mirror conversations. Operational summaries recorded more withheld replies in the inverse condition than in the mirror condition (10 versus 5), together with two safety stops in the inverse condition and one in the mirror condition. These summaries included chats from participants subsequently excluded from the paired analysis. The counts describe automated interventions and do not necessarily indicate confirmed harmful responses.
 
-Any follow-up analyses (optional). Label them clearly as exploratory: they were not planned, so
-they generate hypotheses rather than test them.
-:::
+Sentiment analyses were added after examining the main-study data and were therefore treated as exploratory. Gemini 3.8 Flash was used to classify individual messages as positive, negative, neutral, or mixed using the original study’s classifier prompt. The proportions of messages in each category were calculated separately for chatbots and participants within each conversation. Mirror chatbots produced a greater proportion of positively classified messages than inverse chatbots (d_z = 1.32). Participants’ own messages also contained a greater proportion of positive messages during mirror conversations (d_z = 0.52). The corresponding effect-size estimates reported in the original study were 1.00 and 0.28 respectively. These comparisons were descriptive and didn't establish if sentiment effects differed reliably between studies. Category-specific tests were not adjusted for multiple comparisons.
+
+The mirror chatbot had a greater proportion of positively classified messages for 42 of the 47 analysed participants. Exploratory regression analyses hinted that larger differences in chatbot positivity were associated with larger mirror advantages in affiliation. Among the five participants whose mirror chatbot was less positive, none reported higher affiliation with the mirror chatbot. Since positivity emerged during the personality manipulation, it could represent part of the manipulation’s effect. Consequently, these analyses didn't establish whether personality similarity or positive conversational tone caused the affiliation advantage.
 
 ```{r}
 #| label: exploratory-chat
@@ -1016,6 +1045,194 @@ if (nrow(failed) > 0) {
 ```
 
 ```{r}
+#| label: exploratory-sentiment
+#| eval: !expr have_data && file.exists(file.path("..", "data", "raw", experiment_id, "sentiment.csv"))
+# Exploratory, not preregistered (added after the midterm feedback, 2026-11-07). Every visible
+# message was labelled positive, negative, neutral or mixed with the original paper's classifier
+# prompt (Methods, "Sentiment Analysis"), one message per request, by the chats' own model
+# (gemini-3.8-flash on Vertex AI; scripts/rate-sentiment.js). sentiment.csv holds no text: one row
+# per visible message with its label and counts of "!", "?" and emoji. Analysed participants only.
+sentiment <- read_csv(file.path("..", "data", "raw", experiment_id, "sentiment.csv"), show_col_types = FALSE) |>
+  filter(participant_id %in% keep$participant_id) |>
+  left_join(messages |> select(participant_id, chat_index, seq, n_chars),
+            by = c("participant_id", "chat_index", "seq"))
+sent_labels <- c("positive", "negative", "neutral", "mixed")
+n_unlabelled <- sum(is.na(sentiment$label))
+if (n_unlabelled > 0) message(n_unlabelled, " analysed messages have no label and are left out of the proportions.")
+
+# 1. The paper's analysis: for each chat, the share of that sender's messages in each category
+# (count / that sender's labelled messages in the chat), compared between conditions with a
+# 4 (sentiment) x 2 (condition) repeated-measures ANOVA and a paired t-test per category.
+sent_props <- sentiment |>
+  filter(!is.na(label)) |>
+  mutate(Sender = if_else(from == "bot", "Chatbot", "Participant")) |>
+  count(participant_id, bot_condition, Sender, label) |>
+  complete(nesting(participant_id, bot_condition, Sender), label = sent_labels, fill = list(n = 0)) |>
+  group_by(participant_id, bot_condition, Sender) |>
+  mutate(prop = n / sum(n)) |>
+  ungroup()
+
+# The paper used lmer with a random intercept per participant; lme4 is not used here, so this is
+# the within-participant aov() its code lists as the alternative. df therefore differ from the paper's.
+sent_anova <- sent_props |>
+  mutate(across(c(participant_id, bot_condition, label), as.factor)) |>
+  group_by(Sender) |>
+  group_modify(~ {
+    s <- summary(aov(prop ~ label * bot_condition + Error(participant_id / (label * bot_condition)), data = .x))
+    s <- s[["Error: participant_id:label:bot_condition"]][[1]]
+    rownames(s) <- trimws(rownames(s))
+    tibble(F = s["label:bot_condition", "F value"], df1 = s["label:bot_condition", "Df"],
+           df2 = s["Residuals", "Df"], p = s["label:bot_condition", "Pr(>F)"])
+  }) |>
+  ungroup()
+
+paired_row <- function(m, i) {
+  dd <- m - i
+  n <- length(dd)
+  out <- tibble(N = n, Mirror = mean(m), Inverse = mean(i), d = NA_real_, d_low = NA_real_,
+                d_high = NA_real_, t = NA_real_, df = n - 1, p = NA_real_)
+  if (n < 2 || sd(dd) == 0) return(out)
+  tt <- t.test(m, i, paired = TRUE)
+  dz <- mean(dd) / sd(dd)
+  se <- sqrt(1 / n + dz^2 / (2 * n))
+  out |> mutate(d = dz, d_low = dz - 1.96 * se, d_high = dz + 1.96 * se, t = unname(tt$statistic), p = tt$p.value)
+}
+sent_tests <- sent_props |>
+  select(-n) |>
+  pivot_wider(names_from = bot_condition, values_from = prop) |>
+  filter(!is.na(mirror), !is.na(inverse)) |>
+  group_by(Sender, label) |>
+  summarise(paired_row(mirror, inverse), .groups = "drop") |>
+  left_join(original_sentiment, by = c("Sender", "label")) |>
+  mutate(label = factor(label, levels = sent_labels)) |>
+  arrange(Sender, label)
+
+F_text <- function(who) with(filter(sent_anova, Sender == who),
+                             sprintf("F(%d, %d) = %.2f, %s", as.integer(df1), as.integer(df2), F, p_eq(p)))
+sent_tests |>
+  transmute(Messages = Sender, Sentiment = str_to_sentence(as.character(label)),
+            Mirror = sprintf("%.2f", Mirror), Inverse = sprintf("%.2f", Inverse),
+            `d_z (95% CI)` = sprintf("%.2f (%.2f, %.2f)", d, d_low, d_high),
+            t = sprintf("t(%d) = %.2f", as.integer(df), t),
+            p = fmt_p(p),
+            `Original d_z` = if_else(is.na(d_original), "not reported", sprintf("%.2f", d_original))) |>
+  knitr::kable(caption = paste0(
+    "Exploratory: mean share of each sender's messages in each sentiment category, by condition, with ",
+    "paired mirror − inverse tests (", phase1_label, ", analysed participants). Original: Experiment 3, p. 8. ",
+    "Sentiment × condition interaction: chatbot messages ", F_text("Chatbot"),
+    "; participant messages ", F_text("Participant"), "."))
+
+# 2. Positivity control (suggested in the midterm feedback). Per participant, the mirror − inverse
+# difference in the chatbots' positivity, measured as the paper measures sentiment: the share of the
+# chatbot's messages labelled positive (in percentage points). Model 2 adds the differences in
+# message length (mean characters, per 100) and exclamation marks per message.
+# The intercept is the mirror advantage in affiliation expected when the two chatbots were equally
+# positive (and, in model 2, equally long and as exclamatory). Positivity is partly how a personality
+# shows itself, so this removes some of the effect itself as well as any confound.
+bot_style <- sentiment |>
+  filter(from == "bot", !is.na(label)) |>
+  group_by(participant_id, bot_condition) |>
+  summarise(positive = 100 * mean(label == "positive"),
+            chars = mean(n_chars), exclaim = mean(n_exclaim), .groups = "drop") |>
+  pivot_wider(names_from = bot_condition, values_from = c(positive, chars, exclaim)) |>
+  transmute(participant_id,
+            pos_diff  = positive_mirror - positive_inverse,
+            len_diff  = (chars_mirror - chars_inverse) / 100,
+            excl_diff = exclaim_mirror - exclaim_inverse)
+positivity <- keep |>
+  select(participant_id, diff) |>
+  inner_join(bot_style, by = "participant_id") |>
+  mutate(pos_diff10 = pos_diff / 10)
+
+# The control is informative only if the positivity difference varies in sign across participants.
+positivity |>
+  summarise(`Mirror chatbot more positive` = sum(pos_diff > 0), `Equally positive` = sum(pos_diff == 0),
+            `Inverse chatbot more positive` = sum(pos_diff < 0),
+            `Median difference (points)` = round(median(pos_diff), 1)) |>
+  knitr::kable(caption = "Exploratory: which chatbot was more positive (share of its messages labelled positive), analysed participants.")
+
+pos_models <- list(
+  "1: positivity" = lm(diff ~ pos_diff10, data = positivity),
+  "2: positivity, length, exclamation marks" = lm(diff ~ pos_diff10 + len_diff + excl_diff, data = positivity)
+)
+term_names <- c(
+  "(Intercept)" = "Intercept: mirror advantage at equal chatbot style",
+  pos_diff10 = "Share of positive messages, mirror − inverse (per 10 points)",
+  len_diff = "Message length, mirror − inverse (per 100 characters)",
+  excl_diff = "Exclamation marks per message, mirror − inverse"
+)
+imap_dfr(pos_models, ~ broom::tidy(.x, conf.int = TRUE) |>
+           mutate(Model = .y, N = nobs(.x), R2 = summary(.x)$r.squared)) |>
+  transmute(Model, Term = term_names[term],
+            Estimate = sprintf("%.2f (%.2f, %.2f)", estimate, conf.low, conf.high),
+            p = fmt_p(p.value),
+            N, `R²` = sprintf("%.2f", R2)) |>
+  knitr::kable(caption = paste0(
+    "Exploratory: mirror − inverse affiliation regressed on mirror − inverse chatbot style (estimate, 95% CI). ",
+    "Without any control, the mean difference is ", sprintf("%.2f", mean(positivity$diff)), "."))
+```
+
+```{r}
+#| label: fig-sentiment
+#| eval: !expr have_data && exists("sent_props")
+#| fig-cap: !expr 'paste0(phase1_label, ", exploratory (laid out like the original''s Fig. 4E): share of each sender''s messages in each sentiment category, per chat. Small dots: one participant''s chat, with a grey line joining the same participant''s mirror and inverse chats. Large points: means with 95% CIs. Above each category: this study''s paired d_z (mirror − inverse) and the original''s (Experiment 3, p. 8; n.r.: not reported).")'
+#| fig-width: 10
+#| fig-height: 4.8
+cat_levels <- c("Positive", "Neutral", "Mixed", "Negative")   # ordered by valence, not alphabetically
+sent_fig <- sent_props |>
+  mutate(Category = factor(str_to_sentence(label), levels = cat_levels),
+         Condition = factor(str_to_sentence(bot_condition), levels = c("Mirror", "Inverse")),
+         Sender = paste(Sender, "messages"),
+         x = as.numeric(Category) + if_else(Condition == "Mirror", -0.19, 0.19) + nudge(participant_id, 0.018))
+sent_means <- sent_fig |>
+  group_by(Sender, Category, Condition) |>
+  summarise(mean_ci(prop), .groups = "drop") |>
+  mutate(x = as.numeric(Category) + if_else(Condition == "Mirror", -0.19, 0.19))
+sent_d <- sent_tests |>
+  mutate(Category = factor(str_to_sentence(as.character(label)), levels = cat_levels),
+         Sender = paste(Sender, "messages"),
+         text = sprintf("d_z %.2f\norig. %s", d, if_else(is.na(d_original), "n.r.", sprintf("%.2f", d_original))))
+ggplot(sent_fig, aes(x = x, y = prop)) +
+  geom_line(aes(group = interaction(participant_id, Category)), colour = "grey70", alpha = 0.3, linewidth = 0.3) +
+  geom_point(aes(fill = Condition), shape = 21, colour = "white", stroke = 0.2, size = 1.6, alpha = 0.75) +
+  geom_linerange(data = sent_means, aes(x = x, ymin = ymin, ymax = ymax), inherit.aes = FALSE, linewidth = 1, colour = "grey15") +
+  geom_point(data = sent_means, aes(x = x, y = y, fill = Condition), inherit.aes = FALSE, shape = 21, size = 3.6, colour = "grey15", stroke = 0.8) +
+  geom_text(data = sent_d, aes(x = as.numeric(Category), y = 1.13, label = text), inherit.aes = FALSE, size = 3.1, colour = "grey25", lineheight = 0.9) +
+  facet_wrap(~ Sender) +
+  scale_fill_manual(values = condition_colours, labels = c(Mirror = "Mirror chatbot", Inverse = "Inverse chatbot"), name = NULL) +
+  scale_x_continuous(breaks = seq_along(cat_levels), labels = cat_levels) +
+  scale_y_continuous(breaks = seq(0, 1, 0.25), labels = scales::percent, limits = c(0, 1.2)) +
+  labs(x = NULL, y = "Share of that sender's messages in the chat") +
+  theme_report() +
+  theme(panel.grid.major.x = element_blank())
+```
+
+```{r}
+#| label: fig-positivity
+#| eval: !expr have_data && exists("positivity")
+#| fig-cap: !expr 'paste0(phase1_label, ", exploratory: each analysed participant''s mirror − inverse affiliation against the difference in how positive the two chatbots were (share of each chatbot''s messages labelled positive), coloured by the participant''s own agreeableness. Line: linear fit with 95% CI; where it crosses zero positivity difference is the intercept of model 1.")'
+#| fig-width: 7
+#| fig-height: 5
+pos_fig <- positivity |> left_join(keep |> select(participant_id, trait_agreeableness), by = "participant_id")
+y_top <- max(pos_fig$diff) + 0.6
+ggplot(pos_fig, aes(x = pos_diff, y = diff)) +
+  geom_hline(yintercept = 0, colour = "grey55", linewidth = 0.4) +
+  geom_vline(xintercept = 0, colour = "grey55", linewidth = 0.4) +
+  geom_smooth(method = "lm", formula = y ~ x, colour = "grey20", fill = "grey60", alpha = 0.25, linewidth = 0.9) +
+  geom_point(aes(fill = trait_agreeableness), shape = 21, colour = "grey30", stroke = 0.3, size = 3) +
+  annotate("text", x = -4, y = y_top, hjust = 1, size = 3.6, colour = "grey25",
+           label = sprintf("← inverse more positive: %d", sum(pos_fig$pos_diff < 0))) +
+  annotate("text", x = 4, y = y_top, hjust = 0, size = 3.6, colour = "grey25",
+           label = sprintf("mirror more positive: %d →", sum(pos_fig$pos_diff > 0))) +
+  scale_fill_viridis_c(option = "D", end = 0.92, name = "Participant's own agreeableness (1–5)",
+                       guide = guide_colourbar(title.position = "top", barwidth = 10, barheight = 0.6)) +
+  scale_y_continuous(breaks = -4:4) +
+  labs(x = "Chatbot messages labelled positive, mirror − inverse (percentage points)",
+       y = "Affiliation, mirror − inverse") +
+  theme_report()
+```
+
+```{r}
 #| label: data-quality
 #| eval: !expr have_data
 if (nrow(errors) > 0) {
@@ -1030,98 +1247,45 @@ if (nrow(errors) > 0) {
 
 ### Summary of replication attempt
 
-::: {.callout-tip icon=false}
-## Guidance
-
-Open with one paragraph summarizing the result of the key analysis and your assessment of
-whether the original finding replicated, partially replicated, or failed to replicate. Base
-that judgment on the replication assessment above: the size of the effect relative to the
-original, not just the p value.
-:::
+The replication supported the original finding that participants reported greater affiliation with a chatbot prompted to mirror their personality than with one prompted to reflect the opposite profile. Among the 47 analysed participants, the estimated effect was d_z = 0.71, 95% CI [0.39, 1.03], compared with the original study’s d_z = 0.57, 95% CI [0.36, 0.78]. The replication therefore reproduced the direction of the finding with an effect-size estimate compatible with the original, although its wider confidence interval indicates lower precision. This pattern occurred with a different language model and additional conversational safeguards. However, the exploratory analyses showed that mirror chatbots also generally produced more positive messages, leaving unresolved how much the affiliation advantage reflected personality similarity or positive conversational tone.
 
 ### Commentary
 
-::: {.callout-tip icon=false}
-## Guidance
+The exploratory findings suggested that conversational positivity may contribute to the mirror chatbot’s affiliation advantage, since for 42 of the 47 analysed participants, the mirror chatbot produced a greater proportion of positively classified messages, and larger positivity differences were associated with larger affiliation differences. Participants may therefore have responded partly to a more pleasant conversational style. However, personality similarity and positivity were not independently manipulated, and positivity could itself be one way that the personality manipulation influenced affiliation. Controlling statistically for positivity cannot establish a separate causal effect of similarity. Moreover, model-generated sentiment labels describe the text and do not directly measure how pleasant participants found the conversations.
 
-Open-ended commentary, none of it long: (a) what the exploratory analyses suggest; (b) what the
-replication means, for example whether the differences between your study and the original are
-definitely, plausibly, or unlikely to be moderators of the result; and (c) any objections or
-challenges raised by you or the original authors.
-:::
+Several implementation differences could also influence the size of the affiliation effect. For example, replacing GPT-4.1 with Gemini 3.8 Flash and changing the generation configuration could alter how the assigned personality profiles were expressed. The additional safety instructions and reply screening could also change conversational tone and exposure. Although the same safeguards applied to both conditions, they could affect the conditions differently if particular personality profiles were more likely to trigger an intervention. Other differences, including generated greetings and participant characteristics, might also matter. Because these features were not varied independently, the present study cannot determine which differences moderated the result.
+
+The main limitation concerned what the replicated effect established. Participants’ self-reported personality scores determined the prompts, but no manipulation check questioned whether they actually perceived the mirror chatbot as more similar to themselves. Affiliation ratings following brief conversations also provided limited evidence about lasting relationships, accurate understanding of a person, or improved self-understanding. The sample of 47 analysed participants produced an imprecise effect-size estimate, and excluding participants whose chats ended early means that the primary result describes participants who completed both full conversations and met the remaining analysis criteria. These limitations motivated an extension measuring perceived chatbot personality and participants’ stated preference for another conversation.
 
 # Phase 2: Extension
 
-::: {.callout-tip icon=false}
-## Guidance: choosing your extension
-
-Follow the Extension guidelines page on Canvas. In brief:
-
-- **By default the extension is a best-practices modification of your Phase 1 experiment.** If
-  your replication did not succeed, it is a **rescue**: address the plausible reasons for the
-  failure. If it did succeed, it is an **upgrade**: make the estimate more precise. Typical
-  changes are better or more reliable measurement, more trials, a within-participant design
-  where that is legitimate, comprehension and manipulation checks, clearer instructions, or a
-  larger or better-targeted sample.
-- **If your scientific extension pitch was approved at Milestone 3 and your replication
-  succeeded, propose that instead:** the original conditions rerun unchanged, plus the one
-  added condition or manipulation, with a power analysis for the new comparison.
-- On either track you may add exploratory measures **at the end** of the study.
-- Every change is listed and tagged by category below; everything else stays identical.
-
-State your track on the line below, and delete the others.
-:::
-
-**Track:** Best-practices upgrade / Best-practices rescue / Scientific extension (approved at Milestone 3)
+**Track:** Best-practices upgrade
 
 ## Rationale
 
-::: {.callout-tip icon=false}
-## Guidance
+Phase 1 reproduced the original affiliation results, but neither the personality prompts nor the affiliation ratings confirmed if participants actually perceived the mirror chatbot as more similar to themselves. The exploratory sentiment analysis also supported that the mirror chatbot produced a greater proportion of positive messages for 42 of the 47 analysed participants, which raised the question whether conversational pleasantness may have contributed to the affiliation difference. Phase 2 therefore strengthened the interpretation of the manipulation by measuring participants’ perceptions of each chatbot’s personality.
 
-One or two paragraphs. For a rescue: what are the plausible reasons Phase 1 did not reproduce the
-original result, and how does each change address one of them? For an upgrade: where is the
-Phase 1 estimate least precise or least trustworthy, and how will the changes improve it? For a
-scientific extension: what question does the added condition answer, and why does it follow from
-the original finding?
-:::
+After completing the affiliation ratings for both chatbots, we required participants to rate each chatbot using the Ten-Item Personality Inventory, which would help assess whether differences between chatbots were concentrated in agreeableness and emotional stability, not similarity to participant's profile. A final exploratory forced-choice question asked which chatbot participants would choose to converse with again, providing a measure of stated preference for further interaction. 
 
 ## Changes from Phase 1
 
-::: {.callout-tip icon=false}
-## Guidance
-
-Every change from the Phase 1 experiment, one per row, each tagged with a category: Measurement,
-Trials, Design, Checks, Instructions, Sample, Added condition (scientific track only), or
-Exploratory measure (end of study only). If it is not in this table, it does not change: same
-materials, wording, procedure, exclusion rule and analysis. The rows below are examples for the
-demo; replace them with yours.
-:::
 
 | # | Category | Phase 1 | Phase 2 | Why |
 |---|---|---|---|---|
-| 1 | Sample | 27 analysed participants | 300 analysed participants (150 per frame) | Phase 1's interval was too wide to distinguish the original effect from a much smaller one. |
-| 2 | Checks | No comprehension check | After the choice, participants say how many people are at risk (600) | Confirms participants read the scenario; failures are reported, and excluded only if preregistered. |
-| 3 | Exploratory measure | None | At the end: "How confident are you in your choice?" (1–7) | Exploratory only; collected after every confirmatory measure. |
+| 1 | Checks | Participants didn't need to rate chatbots. | After both affiliation questionnaires, participants completed the TIPI for each chatbot, with wording adapted to refer to the chatbot: 10 items per chatbot, 20 responses in total. | Assessed the perceived personality of each chatbot and whether the intended personality contrast was apparent to participants. |
+| 2 | Exploratory measure | None | After the personality ratings, ask: “Which chatbot would you chat with again?” | Measure stated preference for further interaction alongside the affiliation ratings. |
 
 Everything not listed above is identical to Phase 1.
 
 ## Power and sample
 
-::: {.callout-tip icon=false}
-## Guidance
-
-Justify the Phase 2 sample, and **state how you expect the estimate and its precision to compare
-with Phase 1**. For an upgrade, plan the sample around the confidence interval you want; for a
-rescue, around the power to detect the original effect, or the smallest effect you would still
-consider a successful replication; for a scientific extension, around the power to detect the new
-comparison. Set `phase2_n_per_group` in the code below; the table uses Phase 1's estimate if you
-have it and the original's otherwise.
-:::
+Phase 2 also targeted 50 completed participants, which reflected budget constraints and matched the completion target used in Phase 1. Using the Phase 1 estimate of d_z = 0.71 for planning, the approximate expected 95% confidence interval half-width was ±0.31, compared with ±0.32 in Phase 1. Phase 2 therefore was expected to provide similar precision, with its principal improvement being the additional assessment of perceived chatbot personality and preference for further interaction. With 50 analysable pairs, a two-sided paired-samples t-test at α = .05 had approximately 97.7% power for the original reported effect of d_z = 0.57 and 54.8% power for the original authors’ planning effect of d_z = 0.30.
 
 ```{r}
 #| label: phase2-power
-phase2_n <- 150   # planned analysed participants in Phase 2 (each chats with both bots)
+# Phase 2's target: 50 completed participants (each chats with both bots), as in Phase 1. Exclusions
+# lower the analysed N (Phase 1: 50 completed, 47 analysed), so the values below are upper bounds.
+phase2_n <- 50
 
 # Pilot data are never used as the Phase 1 estimate (too few, and not the replication sample).
 p1_stats <- if (have_data && !grepl("pilot", experiment_id)) paired_stats(phase1)
@@ -1140,7 +1304,7 @@ rows <- tibble(
   `95% CI half-width on d_z` = c(if (!is.null(p1_stats) && !is.na(p1_stats$d)) sprintf("±%.2f", (p1_stats$d_high - p1_stats$d_low) / 2),
                                  sprintf("±%.2f (expected)", half_width(phase2_n, basis_d)))
 )
-knitr::kable(rows, caption = sprintf("Precision of the key estimate, Phase 2 expected values based on %s.", basis))
+knitr::kable(rows, caption = sprintf("Precision of the key estimate. Phase 2: expected value based on %s, if all %d completed participants are analysed (exclusions widen it).", basis, phase2_n))
 
 tibble(
   `Effect to detect` = c(sprintf("Original: d_z = %.2f", original$d),
@@ -1154,23 +1318,14 @@ tibble(
     power_at(phase2_n, original$d / 2)
   ), accuracy = 1)
 ) |>
-  knitr::kable(caption = sprintf("Power of the Phase 2 key test with %d participants, two-sided alpha = .05.", phase2_n))
+  knitr::kable(caption = sprintf("Power of the Phase 2 key test if all %d completed participants are analysed (an upper bound: exclusions lower it), two-sided alpha = .05.", phase2_n))
 ```
 
 ## Analysis plan
 
-::: {.callout-tip icon=false}
-## Guidance
+The primary analysis should use Phase 2 data alone and retain the scoring and exclusion rules used in Phase 1. The prespecified manipulation check assessed whether participants perceive the mirror chatbot’s personality profile as closer to their own. TIPI scores followed the published scoring key, reversing items 2, 4, 6, 8, and 10 and averaging the two items for each trait. Participant BFI scores were mapped to a 0–1 range using (score − 1)/4, and chatbot TIPI scores using (score − 1)/6. The participant’s rescaled neuroticism score was subtracted from 1 to align its direction with emotional stability. For each chatbot, profile distance was defined as the square root of the mean squared difference across the five aligned traits, giving each trait equal weight so that smaller distances indicated closer profiles. A two-sided paired-samples t-test at α = .05 compared mirror and inverse distances. 
 
-The confirmatory analysis for Phase 2, written before Phase 2 data collection. On the
-best-practices tracks this is normally the same key test as Phase 1, run on the Phase 2 data
-alone; say whether you will also report a pooled estimate across phases, and label it
-exploratory if so. On the scientific track, specify the test for the new comparison. Name the
-exclusion rule (unchanged unless it is in the Changes table) and list any exploratory measures.
-
-Run Phase 2 under a new `EXPERIMENT.id` in `experiment.js` (for example `smith2016-phase2`) and
-set `experiment_id_phase2` at the top of this file to match, so the two phases' data never mix.
-:::
+Exploratory analyses examined whether the affiliation advantage was associated with perceived profile similarity and particular chatbot traits. A participant-level regression predicted the mirror-minus-inverse affiliation difference from the inverse-minus-mirror profile-distance difference and the mirror-minus-inverse differences in perceived agreeableness and emotional stability. These predictors were entered together, and coefficients and confidence intervals were interpreted as associations. Agreeableness and emotional stability was treated as separate personality dimensions, rather than combined into an assumed measure of pleasantness.
 
 ## Results
 
@@ -1196,9 +1351,8 @@ p2_stats <- paired_stats(phase2)
 cat(sprintf("Phase 2: %d started, %d completed, %d analysed.\n",
             nrow(phase2$participants), nrow(phase2$complete), nrow(phase2$keep)))
 if (!is.null(p2_stats) && !is.na(p2_stats$t)) {
-  cat(sprintf("Key comparison: mean difference %.2f, t(%d) = %.2f, p %s, d_z = %.2f [%.2f, %.2f].\n",
-              p2_stats$mean_diff, as.integer(p2_stats$df), p2_stats$t,
-              if (p2_stats$p < 0.001) "< .001" else sprintf("= %.3f", p2_stats$p),
+  cat(sprintf("Key comparison: mean difference %.2f, t(%d) = %.2f, %s, d_z = %.2f [%.2f, %.2f].\n",
+              p2_stats$mean_diff, as.integer(p2_stats$df), p2_stats$t, p_eq(p2_stats$p),
               p2_stats$d, p2_stats$d_low, p2_stats$d_high))
 }
 ```
@@ -1208,9 +1362,11 @@ if (!is.null(p2_stats) && !is.na(p2_stats$t)) {
 #| eval: !expr have_phase2
 #| fig-cap: !expr 'paste0("Mirror minus inverse affiliation as an effect size (d_z, 95% CI): original study, ", phase1_label, ", and Phase 2 extension.")'
 #| fig-width: 8
-#| fig-height: 3
-do.call(comparison_plot, setNames(list(original, if (have_data) paired_stats(phase1), paired_stats(phase2)),
-                                  c("Original", phase1_label, "Phase 2: extension")))
+#| fig-height: 4.2
+do.call(comparison_plot, c(setNames(list(original, if (have_data) paired_stats(phase1), paired_stats(phase2)),
+                                    c("Original", phase1_label, "Phase 2: extension")),
+                           list(raw = setNames(list(if (have_data) phase1$keep$diff, phase2$keep$diff),
+                                               c(phase1_label, "Phase 2: extension")))))
 ```
 
 ## Discussion

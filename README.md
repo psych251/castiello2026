@@ -18,7 +18,7 @@ Start with **[docs/student-guide.md](docs/student-guide.md)**. The short version
 # 1. Use this template -> create your project repo -> clone it
 npm install
 npm start          # open http://localhost:8000 : the demo runs in "offline" mode
-npm test           # robot participant + emulator; 10 tests, should pass out of the box
+npm test           # robot participant + emulator; 79 tests (1 skipped by design), should pass out of the box
                    # (needs Java 17+; downloads a test browser the first time)
 
 # 2. Create a Firebase project (personal Google account), enable Firestore + Anonymous auth,

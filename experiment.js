@@ -10,9 +10,10 @@
  *           "different" reversed. Saved on the `affiliation` trial as affiliation_mirror and
  *           affiliation_inverse.
  *   Trials: consent, BFI-44 (+1 attention check), task instructions, chat 1 (24 messages),
- *           chat 2 (24 messages), post-chat questionnaire, demographics, two optional
- *           free-text feedback questions (added for Pilot B; not part of the paper's design),
- *           debrief.
+ *           chat 2 (24 messages), post-chat questionnaire, [Phase 2 only: TIPI for chatbot 1,
+ *           TIPI for chatbot 2, "Which chatbot would you chat with again?"], demographics, two
+ *           optional free-text feedback questions (added for Pilot B; not part of the paper's
+ *           design), debrief.
  *   Random: order (mirror first / inverse first) x name (mirror is Pat / mirror is Alex),
  *           simple random assignment, drawn by the chat service.
  *   Exclusions (preregistration, applied in the report): fewer than 8 turns in a chat, a
@@ -38,7 +39,12 @@ const EXPERIMENT = {
   // pilot keeps its own id and records and is never pooled with it: Pilot B ("castiello2026-pilot-b",
   // naive Prolific), Pilot C ("castiello2026-pilot-c", the researcher and informed testers) and
   // Pilot D ("castiello2026-pilot-d", the revised naive Prolific pilot, which ran as commit 9449b20).
-  id: "castiello2026-main",
+  // The main replication ran as "castiello2026-main" (commit 73d97e0, 2026-11-02 to 2026-11-04).
+  // Phase 2 (the extension): first its pilot, "castiello2026-phase2-pilot" (two invited, non-naive
+  // testers; never pooled with the extension sample), then the extension sample itself,
+  // "castiello2026-phase2" (experiment_id_phase2 in the report), which stays closed in
+  // server/config.js until the Phase 2 preregistration is final and approved.
+  id: "castiello2026-phase2-pilot",
 
   // Trials per Firestore write. 1 = save every trial the moment it finishes. This study has
   // only about ten trials, so 1 is well inside the free tier.
@@ -50,7 +56,9 @@ const EXPERIMENT = {
   // Prolific: participants who finish are redirected to Prolific with this completion code. SET
   // BEFORE LAUNCH from the new Prolific study (not Pilot B's code). Until it is set, together with
   // prolific.study_id, the published page does not open.
-  prolific_completion_code: "C15R004P", // the main study draft's code (kept from Pilot D, which it duplicates)
+  // Phase 2 pilot: none (invited testers, not Prolific). Phase 2 extension: the new Prolific study's
+  // code, never the main study's ("C15R004P").
+  prolific_completion_code: null,
 
   // Prolific access (Pilot D). The page needs Prolific's PROLIFIC_PID, STUDY_ID and SESSION_ID in
   // its address, and STUDY_ID must be study_id, before it signs in or saves anything; the chat
@@ -59,14 +67,21 @@ const EXPERIMENT = {
   // if the researcher has decided to give one (null: the screen asks the participant to message
   // the researchers on Prolific instead). Kinds: technical_failure (the chat could not continue),
   // left_after_safety_stop, withdrew, paused.
-  prolific: {
-    study_id: "6ae7ea34be6966425ed1c27c", // the main study's Prolific draft (Pilot D's was 6ae2c1c891a6603199aad8fc)
-    early_exit_codes: { technical_failure: null, left_after_safety_stop: null, withdrew: null, paused: null },
-  },
+  // Phase 2 pilot: null (invite links instead, below). For the Phase 2 extension, restore this as
+  // the main study had it, with the NEW Prolific study's id (the main study's was
+  // 6ae7ea34be6966425ed1c27c, Pilot D's 6ae2c1c891a6603199aad8fc), and set invite_only false:
+  //   prolific: { study_id: "<new id>", early_exit_codes: { technical_failure: null,
+  //               left_after_safety_stop: null, withdrew: null, paused: null } },
+  prolific: null,
 
-  // Invite links (Pilot C): only people with ?invite=<code> (scripts/pilot-admin.js) could take
-  // part. Off for Pilot D, which uses Prolific access instead.
-  invite_only: false,
+  // Invite links (Pilot C, and the Phase 2 pilot): only people with ?invite=<code>
+  // (scripts/pilot-admin.js) can take part. Off for Pilot D and the main study, which used
+  // Prolific access instead, and for the Phase 2 extension.
+  invite_only: true,
+
+  // Phase 2 measures (the report's "Changes from Phase 1"): after the affiliation ratings, the TIPI
+  // for each chatbot and "Which chatbot would you chat with again?". false reproduces Phase 1.
+  phase2_measures: true,
 
   // Contact shown in consent and debrief.
   contact_email: "stanfordpsych251@gmail.com",
@@ -91,7 +106,9 @@ const EXPERIMENT = {
   // required or shown) and all twelve affiliation ratings (six per chatbot) must be answered to
   // continue, as in the original study. "Stop and leave the study" on those pages bypasses the
   // check, saves what was answered and ends with the early-exit debrief. Must match
-  // require_all_items for this id in server/config.js. The pilots ran with this false.
+  // require_all_items for this id in server/config.js. Pilots A to D ran with this false; the main
+  // study and both Phase 2 ids run with it true (in Phase 2 it also covers the 20 TIPI ratings and
+  // the forced choice).
   require_all_items: true,
 
   // Two optional free-text questions after demographics, added for Pilot B: what participants
@@ -630,8 +647,119 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
         affiliation_required_all: EXPERIMENT.require_all_items,
       });
       if (data.questionnaire_withdrawn) return; // left from this page: see offerWithdrawal
-      saver.updateParticipant({ chat_status: "done" });
+      // The primary outcome is in: both chats have ended and both chatbots' ratings are saved. This
+      // is the event the completion target counts (the report's read_phase() has always counted
+      // it: "reached the ratings" without leaving from that page), recorded here so it can be
+      // counted without the analysis. Leaving later (Phase 2's measures, the demographics, or
+      // closing the page) never undoes it. `completed` keeps its own meaning: clicked Finish.
+      const primary = data.affiliation_chat1 != null && data.affiliation_chat2 != null;
+      saver.updateParticipant(Object.assign(
+        { chat_status: "done", primary_complete: primary, primary_completed_at: primary ? new Date().toISOString() : null },
+        // Phase 2: the extension measures start now; set true when the forced choice is answered.
+        EXPERIMENT.phase2_measures ? { extension_complete: false } : {}));
     },
+  };
+
+  // -------------------------------------------------------------------------
+  // 6b. Phase 2 only (EXPERIMENT.phase2_measures; the report's "Changes from Phase 1", rows 1 and 2).
+  // After both chatbots' affiliation ratings: each chatbot's perceived personality (TIPI, src/tipi.js),
+  // one page per chatbot in the order of the chats, then which chatbot they would chat with again.
+  // Answers are saved by chat (1 or 2); which chat was the mirror is joined on at export, as for
+  // affiliation, so the page never learns the condition. Required like the other ratings when
+  // require_all_items is set, with the same "Stop and leave the study" button.
+  // -------------------------------------------------------------------------
+  const T = window.Tipi;
+  function tipiPage(index) {
+    return {
+      timeline: [{
+        type: jsPsychSurvey,
+        survey_json: {
+          showQuestionNumbers: "off",
+          widthMode: "responsive",
+          completeText: "Continue",
+          pages: [{
+            elements: [
+              {
+                type: "html",
+                name: "tipi_intro",
+                html: `<p>The questions on this page are about <strong>{BOT}</strong>, ${index === 1 ? "your first" : "your second"} chat partner.</p>`,
+              },
+              {
+                type: "matrix",
+                name: "tipi",
+                title: T.TIPI_STEM,
+                description: T.TIPI_INSTRUCTIONS,
+                columns: T.TIPI_SCALE,
+                columnMinWidth: "72px",
+                rowTitleWidth: "26%",
+                rows: T.TIPI_ITEMS.map((i) => ({ value: i.id, text: i.text })),
+                alternateRows: true,
+                isRequired: EXPERIMENT.require_all_items,
+                isAllRowRequired: EXPERIMENT.require_all_items,
+              },
+            ],
+          }],
+        },
+        survey_function: (survey) => {
+          window.__survey = survey;
+          if (EXPERIMENT.require_all_items) offerWithdrawal(survey, "tipi");
+        },
+        on_start: (trial) => {
+          trial.survey_json = JSON.parse(JSON.stringify(trial.survey_json).replace(/\{BOT\}/g, botName(index)));
+        },
+        data: { task: "tipi", chat_index: index },
+        on_finish: (data) => {
+          data.bot_name = botName(index);
+          if (data.questionnaire_withdrawn) return; // left from this page: see offerWithdrawal
+          const s = T.scoreTipi((data.response || {}).tipi);
+          // As for affiliation: with require_all_items, trait scores only from a complete page.
+          const full = !EXPERIMENT.require_all_items || s.n_items === T.TIPI_ITEMS.length;
+          Object.assign(data, { tipi_raw: s.raw, tipi_n_items: s.n_items, tipi_required_all: EXPERIMENT.require_all_items });
+          for (const trait of T.TIPI_TRAITS) data["tipi_" + trait] = full ? s.scores[trait] : null;
+        },
+      }],
+      conditional_function: () => EXPERIMENT.phase2_measures,
+    };
+  }
+  const choice = {
+    timeline: [{
+      type: jsPsychSurvey,
+      survey_json: {
+        showQuestionNumbers: "off",
+        widthMode: "responsive",
+        completeText: "Continue",
+        pages: [{
+          elements: [{
+            type: "radiogroup",
+            name: "choice",
+            title: T.CHOICE_QUESTION,
+            // In the order of the chats, as on the ratings page.
+            choices: [{ value: 1, text: "BOT1" }, { value: 2, text: "BOT2" }],
+            isRequired: EXPERIMENT.require_all_items,
+          }],
+        }],
+      },
+      survey_function: (survey) => {
+        window.__survey = survey;
+        if (EXPERIMENT.require_all_items) offerWithdrawal(survey, "choice");
+      },
+      on_start: (trial) => {
+        trial.survey_json = JSON.parse(JSON.stringify(trial.survey_json)
+          .replace(/BOT1/g, botName(1)).replace(/BOT2/g, botName(2)));
+      },
+      data: { task: "choice" },
+      on_finish: (data) => {
+        if (data.questionnaire_withdrawn) return;
+        const v = Number((data.response || {}).choice);
+        data.choice_chat = v === 1 || v === 2 ? v : null;
+        // All extension measures complete: both TIPI pages in full and the choice answered.
+        const fullTipi = jsPsych.data.get().filter({ task: "tipi" }).values()
+          .filter((t) => !t.questionnaire_withdrawn && t.tipi_n_items === T.TIPI_ITEMS.length).length;
+        const done = fullTipi === 2 && data.choice_chat !== null;
+        saver.updateParticipant({ extension_complete: done, extension_completed_at: done ? new Date().toISOString() : null });
+      },
+    }],
+    conditional_function: () => EXPERIMENT.phase2_measures,
   };
 
   // -------------------------------------------------------------------------
@@ -708,6 +836,9 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
     ...chatBlock(1),
     ...chatBlock(2),
     affiliation,
+    tipiPage(1),
+    tipiPage(2),
+    choice,
     demographics,
     feedback,
     debrief,

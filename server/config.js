@@ -81,8 +81,23 @@ module.exports = {
     // Runs the revision made after Pilot D's prompt disclosure: profile safety-v4, reply check v3.
     "castiello2026-main": { phase: "main", open: true, max_sessions: 100, default_paused: true, prompt_profile: "castiello2026-exp3-safety-v4",
       require_all_items: true, prolific: { study_id: "6ae7ea34be6966425ed1c27c", max_sessions_per_participant: 2 } },
-    // Closed 2026-10-27 (was max_sessions: 200). Its prompt profile is to be decided.
-    "castiello2026-phase2": { phase: "phase2", open: false, max_sessions: 0, prompt_profile: "castiello2026-exp3-safety-v3" },
+    // Phase 2 pilot (2026-11-15): two invited, non-naive testers (invite links from
+    // scripts/pilot-admin.js), to check the Phase 2 additions (TIPI for each chatbot, then the
+    // forced choice; page only) before the extension. Its records are never pooled with the
+    // extension sample. Everything the service does is as in the main study: profile safety-v4,
+    // reply check v3, every BFI item required. A cap of 6 sessions (two testers, with room for a
+    // reload each and the researcher's own check). Paused until a researcher resumes it.
+    "castiello2026-phase2-pilot": { phase: "phase2-pilot", open: true, max_sessions: 6, invite_only: true, default_paused: true,
+      prompt_profile: "castiello2026-exp3-safety-v4", require_all_items: true },
+    // Phase 2 extension sample: target 50 completed, as in the main study. CLOSED until the Phase 2
+    // preregistration is final and approved (2026-10-27 to now; was max_sessions: 200). At launch:
+    // open: true, max_sessions: 100 (twice the places, as for the main study), and the new Prolific
+    // study's id below (and in experiment.js); it stays paused until a researcher resumes it.
+    // Profile and required items as in the main study (it had safety-v3 as a placeholder until
+    // 2026-11-15, and no require_all_items).
+    "castiello2026-phase2": { phase: "phase2", open: false, max_sessions: 0, default_paused: true,
+      prompt_profile: "castiello2026-exp3-safety-v4", require_all_items: true,
+      prolific: { study_id: null, max_sessions_per_participant: 2 } },
   },
 
   // What a study's sessions get: the prompt text (server/castiello.js PROMPTS), whether replies

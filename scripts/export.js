@@ -49,7 +49,9 @@
  * cannot read them (participants/<id>/private/session). This script joins them back on, so
  * the columns the analysis uses are where they always were: order and the bot conditions in
  * participants.csv, trait_* on the BFI row, bot_condition on each chat row, and
- * affiliation_mirror / affiliation_inverse on the affiliation row. The prompts themselves are
+ * affiliation_mirror / affiliation_inverse on the affiliation row; in Phase 2 also bot_condition on
+ * each chatbot's TIPI row (task "tipi") and choice_condition on the forced-choice row (task
+ * "choice"). The prompts themselves are
  * not exported (they are rebuilt from the scores by server/castiello.js, from the version named
  * in prompt_version).
  */
@@ -247,7 +249,9 @@ function writeCsv(file, rows, firstColumns) {
           t["inverse_" + k] = sess.inverse_scores[k];
         }
       }
-      if (t.task === "chat" || t.task === "chat_intro") t.bot_condition = conditionOf(t.chat_index);
+      if (t.task === "chat" || t.task === "chat_intro" || t.task === "tipi") t.bot_condition = conditionOf(t.chat_index);
+      // Phase 2: which bot the participant would chat with again, as a condition.
+      if (t.task === "choice") t.choice_condition = t.choice_chat === 1 || t.choice_chat === 2 ? conditionOf(t.choice_chat) : null;
       if (t.task === "chat") t.server_n_messages = shown(t.chat_index);
       if (t.task === "affiliation") {
         for (const chat of [1, 2]) {
@@ -294,6 +298,24 @@ function writeCsv(file, rows, firstColumns) {
   console.log("  identifiers.csv is gitignored: it links participant ids to Prolific ids. Keep it private.");
   const done = participants.filter((p) => p.completed).length;
   console.log(`${participants.length} participants (${done} completed), ${trials.length} trials, ${errors.length} error reports.`);
+  // The completion target counts people whose primary outcome is in: the affiliation ratings were
+  // submitted (not left from), after both chats ended. This is read_phase()'s "complete" in the
+  // report, from the trial rows; the page also sets primary_complete at that moment (from the
+  // Phase 2 pilot on). A person's second session is not a second person: unique Prolific ids.
+  // `completed` (clicked Finish) and, in Phase 2, extension_complete (both TIPI pages and the
+  // choice) are reported beside it and never decide the count.
+  const rated = new Set(trials.filter((t) => t.task === "affiliation" && t.questionnaire_withdrawn !== true).map((t) => t.participant_id));
+  for (const p of participants) {
+    if (p.primary_complete === true && !rated.has(p.participant_id)) console.warn(`  warning: ${p.participant_id}: primary_complete is set, but no submitted ratings were exported`);
+  }
+  const pidOf = new Map(identifiers.map((r) => [r.participant_id, r.prolific_pid || null]));
+  const primary = participants.filter((p) => rated.has(p.participant_id));
+  const people = new Set(primary.map((p) => pidOf.get(p.participant_id)).filter(Boolean));
+  const ext = participants.filter((p) => p.extension_complete === true).length;
+  console.log(`Completion target count (ratings submitted): ${primary.length} sessions, ${people.size} unique Prolific participants` +
+    ` (${primary.length - primary.filter((p) => pidOf.get(p.participant_id)).length} without a Prolific id). Of those sessions, ` +
+    `${primary.filter((p) => p.completed === true).length} clicked Finish` +
+    (participants.some((p) => "extension_complete" in p) ? ` and ${primary.filter((p) => p.extension_complete === true).length} completed the Phase 2 measures (${ext} overall).` : "."));
   process.exit(0);
 })().catch((e) => {
   console.error("Export failed:", e.message || e);

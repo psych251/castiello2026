@@ -714,6 +714,39 @@ test.describe("chat service", () => {
     expect(config.prompt_profiles[V3].screen_version).toBeUndefined(); // so Pilots C and D stay on check v2
   });
 
+  test("Phase 2: its pilot and its extension sample run what the main study ran (prompt v4, check v3, every item required); the extension stays closed", async () => {
+    const PILOT2 = "castiello2026-phase2-pilot";
+    const PHASE2 = "castiello2026-phase2";
+    // The service settings that shape what participants get and must answer are the main study's.
+    for (const id of [PILOT2, PHASE2]) {
+      expect(config.experiments[id], id).toMatchObject({ prompt_profile: config.experiments[MAIN].prompt_profile, require_all_items: true, default_paused: true });
+    }
+    expect(config.experiments[MAIN].prompt_profile).toBe(V4);
+    expect(config.prompt_profiles[V4]).toMatchObject({ prompt: "v4", screen_replies: true, screen_version: SCREEN_V3 });
+    // The pilot: invited testers only, a small cap. The extension: closed, no sessions, Prolific access once set.
+    expect(config.experiments[PILOT2]).toMatchObject({ phase: "phase2-pilot", open: true, invite_only: true, max_sessions: 6 });
+    expect(config.experiments[PILOT2].prolific).toBeUndefined();
+    expect(config.experiments[PHASE2]).toMatchObject({ phase: "phase2", open: false, max_sessions: 0, prolific: { max_sessions_per_participant: 2 } });
+    // In the real function, a Phase 2 pilot session gets prompt v4 and check v3 (simulated model), and the
+    // extension refuses everyone before any model call.
+    const real = makeService({ realExperiments: true });
+    expect((await real.call("/access", { experiment_id: PHASE2, prolific: PROLIFIC() }, null)).body.error).toBe("study_closed");
+    // The pilot: paused until resumed, and invite-only (the experiment suite resumes it in this emulator).
+    expect(["study_paused", "invite_invalid"]).toContain((await real.call("/access", { experiment_id: PILOT2 }, null)).body.error);
+    expect(real.model.calls.length).toBe(0);
+    // (makeService() opens every study and drops invites and pauses, keeping each one's profile and required items.)
+    const loose = makeService();
+    const who = newParticipant();
+    const started = await loose.call("/session", { experiment_id: PILOT2, participant_id: who.pid, bfi: bfiAnswers([]) }, who.uid);
+    expect(started.status).toBe(200);
+    const doc = (await adminDb().doc(`experiments/${PILOT2}/participants/${who.pid}/private/session`).get()).data();
+    expect(doc).toMatchObject({ study_phase: "phase2-pilot", prompt_version: V4, safety_version: SCREEN_V3, require_all_items: true });
+    expect(doc.chat1_prompt.endsWith("\n\n" + Castiello.BOUNDARIES_V4)).toBe(true);
+    // Every BFI item is required, as in the main study: one blank item is refused.
+    const who2 = newParticipant();
+    expect((await loose.call("/session", { experiment_id: PILOT2, participant_id: who2.pid, bfi: bfiAnswers([1]) }, who2.uid)).body.error).toBe("too_many_skips");
+  });
+
   test("the reply check (v3) withholds clear prompt disclosures and drafting artifacts, and passes ordinary talk about AI, personality, instructions and drafts (synthetic text)", () => {
     const { screenReply, RULES, DISCLOSURE_RULES, QUOTE_WORDS } = require("../server/safety.js");
     const prompt = Castiello.PROMPTS.v4(FIXED_SCORES, "Alex");
@@ -1147,14 +1180,30 @@ test.describe("chat service", () => {
     expect((await deployedMain.call("/access", { experiment_id: "castiello2026-main", prolific: { pid: "P1", study_id: "S1", session_id: "X1" } }, null)).body.error).toBe(MAIN_STUDY ? "prolific_required" : "study_not_configured");
   });
 
-  test("launch values: the page and the service name the same Prolific study, with a completion code, and never a pilot's", () => {
+  test("launch values: the page and the service agree on the page's study, how people get in and required items, and never reuse an earlier study's Prolific study or code", () => {
     const page = fs.readFileSync(path.join(__dirname, "..", "experiment.js"), "utf8");
-    expect(/\n\s*id: "([^"]+)"/.exec(page)[1]).toBe(MAIN);
-    const pageStudy = JSON.parse(/prolific: \{\s*study_id: (null|"[^"]*")/.exec(page)[1]);
+    const pageId = /\n\s*id: "([^"]+)"/.exec(page)[1];
+    const svc = config.experiments[pageId];
+    expect(svc, pageId + " must be in server/config.js").toBeTruthy();
+    expect(svc).toMatchObject({ open: true, default_paused: true }); // open, but paused until a researcher resumes it
+    expect(!!svc.invite_only).toBe(/\n\s*invite_only: true,/.test(page));
+    expect(!!svc.require_all_items).toBe(/\n\s*require_all_items: true,/.test(page));
     const code = JSON.parse(/prolific_completion_code: (null|"[^"]*")/.exec(page)[1]);
-    expect(pageStudy).toBe(MAIN_STUDY);
-    expect(!!code).toBe(!!MAIN_STUDY); // both set, or neither: the published page stays shut until both are
-    expect(MAIN_STUDY).not.toBe("6ae2c1c891a6603199aad8fc"); // not Pilot D's Prolific study
+    if (/\n\s*prolific: null,/.test(page)) {
+      // Invited testers (Pilot C, the Phase 2 pilot): no Prolific study and no completion code.
+      expect(svc.prolific).toBeUndefined();
+      expect(code).toBe(null);
+    } else {
+      const pageStudy = JSON.parse(/prolific: \{\s*study_id: (null|"[^"]*")/.exec(page)[1]);
+      expect(pageStudy).toBe(svc.prolific.study_id);
+      expect(!!code).toBe(!!pageStudy); // both set, or neither: the published page stays shut until both are
+      for (const [id, e] of Object.entries(config.experiments)) {
+        if (id !== pageId && e.prolific && e.prolific.study_id) expect(pageStudy, "Prolific study of " + id).not.toBe(e.prolific.study_id);
+      }
+    }
+    // The main study's completion code belongs to it alone.
+    if (pageId !== MAIN) expect(code).not.toBe("C15R004P");
+    // The main study's settings, as it ran.
     expect(config.experiments[MAIN]).toMatchObject({ open: true, default_paused: true, max_sessions: 100, prompt_profile: V4, require_all_items: true });
   });
 

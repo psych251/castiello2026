@@ -18,12 +18,21 @@ const Castiello = require("../server/castiello.js");
 
 const EMULATOR = process.env.EMULATOR === "1" || !!process.env.FIRESTORE_EMULATOR_HOST;
 const PROJECT = "demo-psych251";
-const EXPERIMENT_ID = "castiello2026-main";
+const Tipi = require("../src/tipi.js");
+// The suite follows the page as configured (experiment.js): its study id, how people get in (invite
+// links, as for Pilot C and the Phase 2 pilot, or Prolific, as for Pilot D, the main study and the
+// Phase 2 extension), and whether the Phase 2 measures are on.
+const PAGE_SRC = fs.readFileSync(path.join(__dirname, "..", "experiment.js"), "utf8");
+const EXPERIMENT_ID = /\n\s*id: "([^"]+)"/.exec(PAGE_SRC)[1];
+const PAGE_INVITE_ONLY = /\n\s*invite_only: true,/.test(PAGE_SRC);
+const PAGE_PROLIFIC = !/\n\s*prolific: null,/.test(PAGE_SRC);
+const PAGE_PHASE2 = /\n\s*phase2_measures: true,/.test(PAGE_SRC);
+const STUDY_CONFIG = require("../server/config.js").experiments[EXPERIMENT_ID];
 // The study id in the real server/config.js. Until it is set the emulators accept any id, so the tests
 // use a stand-in; once it is set they use it, and the page refuses every other study's link.
-const MAIN_STUDY = require("../server/config.js").experiments[EXPERIMENT_ID].prolific.study_id;
+const MAIN_STUDY = (STUDY_CONFIG.prolific || {}).study_id || null;
 const TEST_STUDY = MAIN_STUDY || "TESTSTUDY";
-// Pilot C is invite-only. The suite's own invite (made in beforeAll, emulator only) has plenty of uses.
+// For an invite-only study, the suite's own invite (made in beforeAll, emulator only) has plenty of uses.
 const TEST_INVITE = "test-invite-" + Math.random().toString(36).slice(2, 12);
 const sha256 = (x) => require("crypto").createHash("sha256").update(x).digest("hex");
 const FS = `http://localhost:8080/v1/projects/${PROJECT}/databases/(default)/documents`;
@@ -79,18 +88,33 @@ const AFF = {
   aff_chat_again: { chat1: 2, chat2: -1 },
 };
 
+// Phase 2: TIPI answers (1..7) for each chatbot, and the published key typed out again here (not
+// imported) so the test checks the page's scoring against an independent copy. Negative = reversed
+// (8 − answer); each trait is the mean of its two items. Hand-computed:
+//   chat 1: E (7 + 5)/2 = 6, A (7 + 6)/2 = 6.5, C (6 + 6)/2 = 6, ES (6 + 6)/2 = 6, O (5 + 7)/2 = 6
+//   chat 2: E (2 + 2)/2 = 2, A (2 + 2)/2 = 2,   C (3 + 3)/2 = 3, ES (2 + 2)/2 = 2, O (2 + 2)/2 = 2
+const TIPI_KEY = { extraversion: [1, -6], agreeableness: [-2, 7], conscientiousness: [3, -8], emotional_stability: [-4, 9], openness: [5, -10] };
+const tipiAnswers = (values) => Object.fromEntries(values.map((v, i) => ["tipi_" + String(i + 1).padStart(2, "0"), v]));
+const TIPI = { chat1: tipiAnswers([7, 1, 6, 2, 5, 3, 6, 2, 6, 1]), chat2: tipiAnswers([2, 6, 3, 6, 2, 6, 2, 5, 2, 6]) };
+const TIPI_SCORES = {
+  chat1: { extraversion: 6, agreeableness: 6.5, conscientiousness: 6, emotional_stability: 6, openness: 6 },
+  chat2: { extraversion: 2, agreeableness: 2, conscientiousness: 3, emotional_stability: 2, openness: 2 },
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 // Every page load points at the test chat service, and skips the suspension (EXPERIMENT.suspended
 // and server/config.js `suspended`), which only test runs in the emulators may do.
-// The main study needs Prolific's three parameters; each page load gets a fresh Prolific ID unless
-// the test gives one (the service allows two sessions per Prolific ID).
+// A Prolific study needs Prolific's three parameters; each page load gets a fresh Prolific ID unless
+// the test gives one (the service allows two sessions per Prolific ID). An invite-only study needs
+// the suite's invite.
 const prolificQs = () => "PROLIFIC_PID=p" + Math.random().toString(36).slice(2, 12) + "&STUDY_ID=" + TEST_STUDY + "&SESSION_ID=s" + Math.random().toString(36).slice(2, 8);
+const accessQs = () => [PAGE_PROLIFIC ? prolificQs() : "", PAGE_INVITE_ONLY ? "invite=" + TEST_INVITE : ""].filter(Boolean).join("&");
 const url = (qs = "") => {
-  const add = prolificQs().split("&").filter((kv) => !new RegExp("(^|&)" + kv.split("=")[0] + "=").test(qs)); // only what qs lacks
-  return "/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&" + add.join("&") + (qs ? "&" + qs : "");
+  const add = accessQs().split("&").filter(Boolean).filter((kv) => !new RegExp("(^|&)" + kv.split("=")[0] + "=").test(qs)); // only what qs lacks
+  return "/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + (add.length ? "&" + add.join("&") : "") + (qs ? "&" + qs : "");
 };
 
 async function setSurvey(page, values) {
@@ -123,8 +147,23 @@ async function chat(page, chatIndex, { total = 24, prefix = "" } = {}) {
   await page.getByRole("button", { name: "Continue" }).click();
 }
 
+// Phase 2 (when the page has phase2_measures): each chatbot's TIPI page, in the order of the chats,
+// then the forced choice (1 or 2). Waits for each page's own text, so answers never land on the
+// page before.
+async function phase2Pages(page, { tipi = TIPI, choice = 1 } = {}) {
+  if (!PAGE_PHASE2) return;
+  for (const [chat, which] of [["chat1", "first"], ["chat2", "second"]]) {
+    await expect(page.getByText(`${which} chat partner`)).toBeVisible();
+    await setSurvey(page, { tipi: tipi[chat] });
+    await page.locator('input[value="Continue"]').click();
+  }
+  await expect(page.getByText(Tipi.CHOICE_QUESTION)).toBeVisible();
+  await setSurvey(page, { choice });
+  await page.locator('input[value="Continue"]').click();
+}
+
 // stopInChat: stop once that chat has shown its opener (for tests that go on by hand).
-async function runThroughExperiment(page, { bfi = bfiAnswers(), aff = AFF, finish = true, prefix = "", feedback = "I chatted with two bots", stopInChat = null } = {}) {
+async function runThroughExperiment(page, { bfi = bfiAnswers(), aff = AFF, tipi = TIPI, choice = 1, finish = true, prefix = "", feedback = "I chatted with two bots", stopInChat = null } = {}) {
   // 1. consent
   await page.getByRole("button", { name: "I agree to participate" }).click();
   // 2. BFI-44, then the chat service scores it and assigns the bots
@@ -143,6 +182,8 @@ async function runThroughExperiment(page, { bfi = bfiAnswers(), aff = AFF, finis
   // 6. post-chat questionnaire
   await setSurvey(page, aff);
   await page.locator('input[value="Continue"]').click();
+  // 6b. Phase 2: each chatbot's TIPI, then the forced choice
+  await phase2Pages(page, { tipi, choice });
   // 7. demographics
   await page.locator('input[type="number"]').fill("34");
   await page.getByText("Woman", { exact: true }).click();
@@ -282,9 +323,14 @@ test.describe("experiment", () => {
     expect(fromService.map((r) => r.text).join("\n")).not.toMatch(HIDDEN);
     // The debrief's own text is left out: it is the researcher's explanation of the design,
     // shown after the ratings, and may name it ("prompted", "personality profile").
+    // Phase 2's TIPI rows are left out too: their trait names (tipi_openness ...) label the
+    // participant's own ratings of the bots, not anything the service holds; they are checked below.
     const pageData = await page.evaluate(() => JSON.stringify(window.__saver.allTrials
+      .filter((t) => t.task !== "tipi")
       .map((t) => (t.task === "debrief" ? { ...t, stimulus: undefined } : t))));
     expect(pageData).not.toMatch(HIDDEN);
+    const tipiData = await page.evaluate(() => JSON.stringify(window.__saver.allTrials.filter((t) => t.task === "tipi")));
+    expect(tipiData).not.toMatch(/mirror|inverse|prompt|trait_|your name is/i);
     expect(pageData).not.toContain("USERMARKER"); // chat text is not kept in the trial data
 
     // The participant document (which the participant's browser may write) holds no assignment.
@@ -299,9 +345,9 @@ test.describe("experiment", () => {
     const s = await sessionOf(docId);
     expect(s).toMatchObject({ order: "mirror-first", mirror_name: "Pat", inverse_name: "Alex",
       chat1_name: "Pat", chat1_condition: "mirror", chat2_name: "Alex", chat2_condition: "inverse",
-      attention_check_passed: true, bfi_n_skipped: 0, require_all_items: true, study_phase: "main", model_provider: "fake", messages_per_chat: 24,
-      prompt_version: "castiello2026-exp3-safety-v4", safety_version: "castiello2026-screen-v3", invite_label: null, n_safety_flags: 0,
-      prolific_study_id: TEST_STUDY, prolific_pid_hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
+      attention_check_passed: true, bfi_n_skipped: 0, require_all_items: true, study_phase: STUDY_CONFIG.phase, model_provider: "fake", messages_per_chat: 24,
+      prompt_version: "castiello2026-exp3-safety-v4", safety_version: "castiello2026-screen-v3", invite_label: PAGE_INVITE_ONLY ? "TEST" : null, n_safety_flags: 0,
+      prolific_study_id: PAGE_PROLIFIC ? TEST_STUDY : null, prolific_pid_hash: PAGE_PROLIFIC ? expect.stringMatching(/^[0-9a-f]{64}$/) : null });
     expect(JSON.stringify(s)).not.toContain("PROLIFICMARKER"); // the service keeps only a hash
     // The revised prompt: the paper's text (identity clause reworded), then the boundaries, the same for both bots.
     for (const k of ["chat1_prompt", "chat2_prompt"]) {
@@ -353,6 +399,18 @@ test.describe("experiment", () => {
     // The optional feedback is its own trial, after demographics and before the debrief.
     const order = trials.map((t) => t.task);
     expect(order.slice(order.indexOf("demographics"))).toEqual(["demographics", "feedback", "debrief"]);
+    // Phase 2: after the ratings, each chatbot's TIPI (chat order, named) and the forced choice.
+    expect(order.slice(order.indexOf("affiliation"), order.indexOf("demographics")))
+      .toEqual(PAGE_PHASE2 ? ["affiliation", "tipi", "tipi", "choice"] : ["affiliation"]);
+    if (PAGE_PHASE2) {
+      const tipi = trials.filter((x) => x.task === "tipi");
+      expect(tipi.map((x) => [x.chat_index, x.bot_name, x.tipi_n_items, x.tipi_required_all])).toEqual([[1, "Pat", 10, true], [2, "Alex", 10, true]]);
+      for (const [i, chat] of [[0, "chat1"], [1, "chat2"]]) {
+        expect(tipi[i].tipi_raw).toEqual(TIPI[chat]);
+        for (const [trait, score] of Object.entries(TIPI_SCORES[chat])) expect(tipi[i]["tipi_" + trait], chat + " " + trait).toBe(score);
+      }
+      expect(trials.find((x) => x.task === "choice").choice_chat).toBe(1);
+    }
     expect(trials.find((t) => t.task === "feedback").response).toEqual({ task_understanding: "FEEDBACKMARKER I chatted with two bots", confusion: null });
 
     // Export: the analysis columns are joined back on, and the chat text and Prolific id land
@@ -372,6 +430,11 @@ test.describe("experiment", () => {
     expect(t("affiliation")[0].affiliation_inverse).toBeCloseTo(-7 / 6, 10);
     expect(t("affiliation")[0]).toMatchObject({ affiliation_n_items_mirror: 6, affiliation_n_items_inverse: 6 });
     expect(mineOut.participant.require_all_items).toBe(true);
+    if (PAGE_PHASE2) {
+      // Chat 1 was the mirror: its TIPI row and the choice (chat 1) are labelled mirror.
+      expect(t("tipi").map((x) => [x.chat_index, x.bot_condition])).toEqual([[1, "mirror"], [2, "inverse"]]);
+      expect(t("choice")[0]).toMatchObject({ choice_chat: 1, choice_condition: "mirror" });
+    }
     // Feedback: answered or not, and length, in the public files; the text only in feedback.csv.
     expect(t("feedback")[0]).toMatchObject({ feedback_task_understanding_answered: true,
       feedback_task_understanding_n_chars: "FEEDBACKMARKER I chatted with two bots".length,
@@ -451,6 +514,32 @@ test.describe("experiment", () => {
     expect(partial.affiliation_inverse).toBe(null);
   });
 
+  test("scoring: the Phase 2 TIPI items, scale and key are the published ones", async () => {
+    // Gosling, Rentfrow & Swann (2003): items in order, 1–7 labels, and the key (typed out above).
+    expect(Tipi.TIPI_ITEMS.map((i) => i.text)).toEqual(["Extraverted, enthusiastic.", "Critical, quarrelsome.",
+      "Dependable, self-disciplined.", "Anxious, easily upset.", "Open to new experiences, complex.", "Reserved, quiet.",
+      "Sympathetic, warm.", "Disorganized, careless.", "Calm, emotionally stable.", "Conventional, uncreative."]);
+    expect(Tipi.TIPI_SCALE.map((x) => x.value + " " + x.text)).toEqual(["1 Disagree strongly", "2 Disagree moderately",
+      "3 Disagree a little", "4 Neither agree nor disagree", "5 Agree a little", "6 Agree moderately", "7 Agree strongly"]);
+    for (const chat of ["chat1", "chat2"]) expect(Tipi.scoreTipi(TIPI[chat]).scores).toEqual(TIPI_SCORES[chat]);
+    // Against the independent key, for every answer pattern of a seeded sequence.
+    let seed = 251;
+    const next = () => (seed = (seed * 1103515245 + 12345) % 2147483648) % 7 + 1;
+    for (let k = 0; k < 200; k++) {
+      const answers = tipiAnswers(Array.from({ length: 10 }, next));
+      const got = Tipi.scoreTipi(answers);
+      for (const [trait, items] of Object.entries(TIPI_KEY)) {
+        const want = items.map((n) => { const v = answers["tipi_" + String(Math.abs(n)).padStart(2, "0")]; return n < 0 ? 8 - v : v; });
+        expect(got.scores[trait]).toBe((want[0] + want[1]) / 2);
+      }
+      expect(got.n_items).toBe(10);
+    }
+    // A trait with an unanswered item has no score; the others keep theirs. Out-of-range answers are refused.
+    const partial = Tipi.scoreTipi({ ...TIPI.chat1, tipi_06: null });
+    expect(partial).toMatchObject({ n_items: 9, scores: { extraversion: null, agreeableness: 6.5 } });
+    expect(() => Tipi.scoreTipi({ tipi_01: 8 })).toThrow(/out of range/);
+  });
+
   test("main study: every BFI item and the attention check must be answered; any attention-check answer lets them continue", async ({ page }) => {
     await page.goto(url());
     await page.waitForFunction(() => window.__saver && window.__saver.docId);
@@ -510,7 +599,7 @@ test.describe("experiment", () => {
     const zeros = Object.fromEntries(Object.keys(AFF).map((k) => [k, { chat1: 0, chat2: -2 }]));
     await setSurvey(page, zeros);
     await page.locator('input[value="Continue"]').click();
-    await expect(page.locator('input[type="number"]')).toBeVisible();
+    await expect(PAGE_PHASE2 ? page.getByText("first chat partner") : page.locator('input[type="number"]')).toBeVisible();
     const aff = await page.evaluate(() => window.__saver.allTrials.find((t) => t.task === "affiliation"));
     // chat 2: −2 on the four positive items, +2 on the two reversed: (−8 + 4) / 6.
     expect(aff).toMatchObject({ affiliation_n_items_chat1: 6, affiliation_n_items_chat2: 6, affiliation_chat1: 0, affiliation_required_all: true });
@@ -564,6 +653,133 @@ test.describe("experiment", () => {
     // Scores, if the page computed any on leaving, are never from fewer than six items.
     expect(a.affiliation_chat1 ?? null).toBe(null);
     expect(a.affiliation_chat2 ?? null).toBe(null);
+  });
+
+  test("Phase 2: each chatbot's TIPI page and the forced choice need every answer; leaving from a TIPI page keeps the ratings and ends as withdrawn", async ({ page }) => {
+    test.skip(!PAGE_PHASE2, "the page does not have the Phase 2 measures");
+    test.setTimeout(300000);
+    const start = async (qs = "") => {
+      await page.goto(url(qs));
+      await page.waitForFunction(() => window.__saver && window.__saver.docId);
+      const docId = await page.evaluate(() => window.__saver.docId);
+      await page.getByRole("button", { name: "I agree to participate" }).click();
+      await setSurvey(page, { bfi: bfiAnswers() });
+      await page.locator('input[value="Continue"]').click();
+      await page.locator("#jspsych-instructions-next").click();
+      await chat(page, 1);
+      await chat(page, 2);
+      await setSurvey(page, AFF);
+      await page.locator('input[value="Continue"]').click();
+      return docId;
+    };
+    // Chat 1 is the inverse bot, named Alex: the first TIPI page is about Alex.
+    let docId = await start("order=inverse-first&mirror_name=Pat");
+    await expect(page.getByText("first chat partner")).toBeVisible();
+    await expect(page.locator(".sd-question__title").filter({ hasText: "I see Alex as:" })).toBeVisible();
+    for (const item of Tipi.TIPI_ITEMS) await expect(page.getByText(item.text, { exact: true })).toBeVisible();
+    for (const label of Tipi.TIPI_SCALE) await expect(page.getByText(label.text, { exact: true }).first()).toBeVisible();
+    // Nothing answered: all ten rows flagged; nine of ten: one row flagged; the answers stay.
+    await page.locator('input[value="Continue"]').click();
+    await expect(page.locator(".sd-matrix__row--error")).toHaveCount(10);
+    const nine = { ...TIPI.chat1 };
+    delete nine.tipi_07;
+    await setSurvey(page, { tipi: nine });
+    await page.locator('input[value="Continue"]').click();
+    await expect(page.locator(".sd-matrix__row--error")).toHaveCount(1);
+    await expect(page.getByText("first chat partner")).toBeVisible();
+    await setSurvey(page, { tipi: TIPI.chat1 });
+    await page.locator('input[value="Continue"]').click();
+    await expect(page.getByText("second chat partner")).toBeVisible();
+    await expect(page.locator(".sd-question__title").filter({ hasText: "I see Pat as:" })).toBeVisible();
+    await setSurvey(page, { tipi: TIPI.chat2 });
+    await page.locator('input[value="Continue"]').click();
+    // The forced choice: both names, in chat order; no answer blocks.
+    await expect(page.getByText(Tipi.CHOICE_QUESTION)).toBeVisible();
+    await expect(page.locator(".sd-item__control-label")).toHaveText(["Alex", "Pat"]);
+    await page.locator('input[value="Continue"]').click();
+    await expect(page.locator(".sd-question--error")).toHaveCount(1);
+    await expect(page.locator('[data-name="age"]')).toHaveCount(0);
+    await page.getByText("Pat", { exact: true }).click();
+    await page.locator('input[value="Continue"]').click();
+    await expect(page.locator('input[type="number"]')).toBeVisible();
+    const saved = await page.evaluate(() => window.__saver.allTrials);
+    expect(saved.filter((t) => t.task === "tipi").map((t) => [t.chat_index, t.bot_name, t.tipi_n_items, t.tipi_agreeableness]))
+      .toEqual([[1, "Alex", 10, 6.5], [2, "Pat", 10, 2]]);
+    expect(saved.find((t) => t.task === "choice").choice_chat).toBe(2);
+    // Ratings in and every extension measure answered; not yet Finish.
+    await page.evaluate(() => window.__saver._settle());
+    expect(await participantDoc(docId)).toMatchObject({ primary_complete: true, extension_complete: true, completed: false });
+
+    // Leaving from the first TIPI page: the ratings stay, the partial TIPI is saved as given, with no
+    // trait score, and the study ends as withdrawn. The primary outcome still counts (target and
+    // analysis); only the extension measures are missing.
+    docId = await start();
+    await expect(page.getByText("first chat partner")).toBeVisible();
+    await page.evaluate(() => window.__saver._settle());
+    expect(await participantDoc(docId)).toMatchObject({ primary_complete: true, extension_complete: false });
+    await setSurvey(page, { tipi: { tipi_01: 4, tipi_02: 5 } });
+    await page.getByRole("button", { name: "Stop and leave the study" }).click();
+    await page.getByRole("button", { name: "Yes, leave the study" }).click();
+    await expect(page.getByRole("heading", { name: "You have left the study" })).toBeVisible({ timeout: 15000 });
+    await page.evaluate(() => window.__saver._settle());
+    expect(await participantDoc(docId)).toMatchObject({ completed: false, ended_early: "withdrew", primary_complete: true, extension_complete: false });
+    const trials = await trialsOf(docId);
+    expect(trials.find((x) => x.task === "affiliation").affiliation_n_items_chat1).toBe(6);
+    const tw = trials.filter((x) => x.task === "tipi");
+    expect(tw.length).toBe(1);
+    expect(tw[0]).toMatchObject({ questionnaire_withdrawn: true, withdrawn_from: "tipi", response: { tipi: { tipi_01: 4, tipi_02: 5 } } });
+    for (const trait of Tipi.TIPI_TRAITS) expect(tw[0]["tipi_" + trait] ?? null).toBe(null);
+    expect(trials.find((x) => x.task === "choice")).toBeUndefined();
+  });
+
+  // The stopping rule counts the primary outcome (ratings submitted), never Finish or the extension
+  // measures: leaving at the forced choice keeps a session in the count and in the affiliation
+  // analysis, with complete TIPI rows and no choice. PHASE2_EXPORT_SAMPLE=<dir> keeps this export's
+  // participants.csv and trials.csv for checking the report's read_phase() on them.
+  test("Phase 2: leaving at the forced choice keeps the primary outcome; the export counts the session toward the target, apart from Finish and the extension measures", async ({ page }) => {
+    test.skip(!PAGE_PHASE2, "the page does not have the Phase 2 measures");
+    test.setTimeout(300000);
+    await page.goto(url("order=mirror-first&mirror_name=Alex"));
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await page.getByRole("button", { name: "I agree to participate" }).click();
+    await setSurvey(page, { bfi: bfiAnswers() });
+    await page.locator('input[value="Continue"]').click();
+    await page.locator("#jspsych-instructions-next").click();
+    await chat(page, 1);
+    await chat(page, 2);
+    await setSurvey(page, AFF);
+    await page.locator('input[value="Continue"]').click();
+    for (const [chat, which] of [["chat1", "first"], ["chat2", "second"]]) {
+      await expect(page.getByText(`${which} chat partner`)).toBeVisible();
+      await setSurvey(page, { tipi: TIPI[chat] });
+      await page.locator('input[value="Continue"]').click();
+    }
+    await expect(page.getByText(Tipi.CHOICE_QUESTION)).toBeVisible();
+    await page.getByRole("button", { name: "Stop and leave the study" }).click();
+    await page.getByRole("button", { name: "Yes, leave the study" }).click();
+    await expect(page.getByRole("heading", { name: "You have left the study" })).toBeVisible({ timeout: 15000 });
+    await page.evaluate(() => window.__saver._settle());
+    expect(await participantDoc(docId)).toMatchObject({ completed: false, ended_early: "withdrew", primary_complete: true, extension_complete: false });
+
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), "export-"));
+    const log = execFileSync(process.execPath, [path.join(__dirname, "..", "scripts", "export.js"), "--emulator", "--experiment", EXPERIMENT_ID, "--out", out], { encoding: "utf8", stdio: "pipe" });
+    expect(log).toMatch(/Completion target count \(ratings submitted\): \d+ sessions, \d+ unique Prolific participants/);
+    const dump = JSON.parse(fs.readFileSync(path.join(out, "export.json"), "utf8"));
+    const mine = dump.participants.find((x) => x.participant_id === docId);
+    expect(mine.participant).toMatchObject({ primary_complete: true, extension_complete: false, completed: false, ended_early: "withdrew" });
+    const t = (task) => mine.trials.filter((x) => x.task === task);
+    expect(t("affiliation")[0]).toMatchObject({ affiliation_n_items_mirror: 6, affiliation_n_items_inverse: 6 });
+    expect(t("affiliation")[0].questionnaire_withdrawn ?? false).toBe(false);
+    expect(t("tipi").map((x) => [x.chat_index, x.bot_condition, x.tipi_n_items])).toEqual([[1, "mirror", 10], [2, "inverse", 10]]);
+    expect(t("choice")[0]).toMatchObject({ questionnaire_withdrawn: true, withdrawn_from: "choice" });
+    expect(t("choice")[0].choice_chat ?? null).toBe(null);
+    expect(t("choice")[0].choice_condition ?? null).toBe(null);
+    if (process.env.PHASE2_EXPORT_SAMPLE) {
+      fs.mkdirSync(process.env.PHASE2_EXPORT_SAMPLE, { recursive: true });
+      for (const f of ["participants.csv", "trials.csv"]) fs.copyFileSync(path.join(out, f), path.join(process.env.PHASE2_EXPORT_SAMPLE, f));
+    }
+    fs.rmSync(out, { recursive: true, force: true });
   });
 
   test("an abandoned chat is never marked complete", async ({ page }) => {
@@ -701,12 +917,19 @@ test.describe("experiment", () => {
       await page.goto("http://not-localhost.test:8017/?emulator=1&ignore_suspension=1&invite=" + TEST_INVITE +
         "&chat_server=" + encodeURIComponent(CHAT_SERVER) + "&order=mirror-first&cc=XYZ");
       await page.waitForTimeout(3000);
-      // Not emulator mode: no emulator banner, nothing sent to the emulators or the test chat service,
-      // and the published page does not open: its Prolific study is not set, or this address lacks Prolific's parameters.
+      // Not emulator mode: no emulator banner, nothing sent to the emulators or the test chat service.
       await expect(page.getByText("Emulator mode")).toHaveCount(0);
       expect(outside.filter((h) => /^(127\.0\.0\.1|localhost)(:|$)/.test(h))).toEqual([]);
-      await expect(page.getByRole("heading", { name: MAIN_STUDY ? "This link cannot be used" : "Study not available" })).toBeVisible();
-      expect(outside).toEqual([]);
+      if (PAGE_PROLIFIC) {
+        // The published page does not open: its Prolific study is not set, or this address lacks Prolific's parameters.
+        await expect(page.getByRole("heading", { name: MAIN_STUDY ? "This link cannot be used" : "Study not available" })).toBeVisible();
+        expect(outside).toEqual([]);
+      } else {
+        // Invite-only: the published page asks only the deployed chat service about the invite
+        // (aborted here, so it stops at "Study unavailable"), never Auth, Firestore or the emulators.
+        await expect(page.getByRole("heading", { name: "Study unavailable" })).toBeVisible();
+        expect(outside).toEqual([new URL(/chat_endpoint: "([^"]+)"/.exec(PAGE_SRC)[1]).host]);
+      }
     } finally {
       await b.close();
     }
@@ -728,7 +951,7 @@ test.describe("experiment", () => {
   test("without a reachable chat service the Prolific study stops before sign-in, saving nothing", async ({ page }) => {
     const outside = [];
     page.on("request", (r) => { if (!r.url().startsWith("http://localhost:8017")) outside.push(new URL(r.url()).port + new URL(r.url()).pathname); });
-    await page.goto("/?emulator=1&ignore_suspension=1&" + prolificQs() + "&chat_server=" + encodeURIComponent("http://127.0.0.1:9"));
+    await page.goto("/?emulator=1&ignore_suspension=1&" + accessQs() + "&chat_server=" + encodeURIComponent("http://127.0.0.1:9"));
     await expect(page.getByRole("heading", { name: "Study unavailable" })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole("button", { name: "I agree to participate" })).toHaveCount(0);
     expect(await page.evaluate(() => window.__saver)).toBeUndefined();
@@ -736,6 +959,7 @@ test.describe("experiment", () => {
   });
 
   test("Prolific access: without the three Prolific parameters the page stops before sign-in", async ({ page }) => {
+    test.skip(!PAGE_PROLIFIC, "the page is configured for invite links, not Prolific (see the invite access test)");
     const outside = [];
     page.on("request", (rq) => { if (!rq.url().startsWith("http://localhost:8017")) outside.push(new URL(rq.url()).pathname); });
     // Missing parameters, and once the study id is set, another Prolific study's link.
@@ -754,7 +978,36 @@ test.describe("experiment", () => {
     await page.waitForFunction(() => window.__saver && window.__saver.docId);
   });
 
+  test("invite access: without a valid invite the page stops before sign-in", async ({ page }) => {
+    test.skip(!PAGE_INVITE_ONLY, "the page is not invite-only");
+    const outside = [];
+    // The last part of each address (the chat service's own path is /<project>/<region>/chat/<call>).
+    page.on("request", (rq) => { if (!rq.url().startsWith("http://localhost:8017")) outside.push(new URL(rq.url()).pathname.split("/").pop()); });
+    for (const [qs, sent] of [["", []], ["&invite=not-a-real-invite", ["access"]]]) {
+      outside.length = 0;
+      await page.goto("/?emulator=1&ignore_suspension=1&chat_server=" + encodeURIComponent(CHAT_SERVER) + qs);
+      await expect(page.getByRole("heading", { name: "This link cannot be used" })).toBeVisible();
+      await page.waitForTimeout(300);
+      expect(await page.evaluate(() => window.__saver)).toBeUndefined();
+      expect(outside.filter((x) => x !== "health")).toEqual(sent); // at most the access check: nothing to Auth or Firestore
+    }
+    // With the suite's invite, the study starts.
+    await page.goto(url());
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+  });
+
   test("early exits tell Prolific participants what to do: the researcher's code if one is set, otherwise to message on Prolific", async ({ page }) => {
+    if (!PAGE_PROLIFIC) {
+      // Invite-only: no Prolific instructions, but the same early-exit debrief.
+      await page.goto(url());
+      await page.waitForFunction(() => window.__saver && window.__saver.docId);
+      await runThroughExperiment(page, { stopInChat: 1 });
+      await page.getByRole("button", { name: "Stop and leave the study" }).click();
+      await page.getByRole("button", { name: "Yes, leave the study" }).click();
+      await expect(page.getByText("This study investigates if people have different feelings of connection")).toBeVisible({ timeout: 15000 });
+      await expect(page.locator(".early-exit-prolific")).toHaveCount(0);
+      return;
+    }
     for (const [qs, want] of [["", /please send the researchers a message on Prolific/], ["ecc=EARLYCODE", /please enter this code: EARLYCODE/]]) {
       await page.goto(url(qs));
       await page.waitForFunction(() => window.__saver && window.__saver.docId);
@@ -827,6 +1080,7 @@ test.describe("experiment", () => {
     await chat(page, 2);
     await setSurvey(page, AFF);
     await page.locator('input[value="Continue"]').click();
+    await phase2Pages(page);
     await page.locator('input[type="number"]').fill("34");
     await page.getByText("Woman", { exact: true }).click();
     await page.locator('[data-name="native_english"]').getByText("Yes", { exact: true }).first().click();

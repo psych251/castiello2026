@@ -77,11 +77,11 @@ skills in `.claude/skills/` for the detailed procedures.
 - `npx firebase deploy --only functions --project castiello2026-replication` deploys the chat
   service from the local `server/` folder as it stands, committed or not, with the gitignored
   `server/.env.castiello2026-replication`. The page deploys separately, by pushing `main`.
-- `npm test` runs the Auth, Firestore and Functions emulators + Playwright end to end (79 tests:
-  36 for the chat service, some of them Gemini with a mocked SDK or network, and 43 for the
+- `npm test` runs the Auth, Firestore and Functions emulators + Playwright end to end (80 tests:
+  36 for the chat service, some of them Gemini with a mocked SDK or network, and 44 for the
   experiment). Tests follow the study the page is set to (`EXPERIMENT.id`, invite or Prolific
   access), so one is skipped by design: with the invite-only Phase 2 pilot page, "Prolific
-  access" (it needs a Prolific study page); 78 pass. No test calls a real model. Run it before every push. It installs a test
+  access" (it needs a Prolific study page); 79 pass. No test calls a real model. Run it before every push. It installs a test
   browser and the chat service's dependencies (`server/node_modules`) on first use; needs
   Java 17+ for the emulator.
 - `npm run export -- --experiment <id>` exports data.

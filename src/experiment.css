@@ -33,6 +33,19 @@
 /* Survey pages (BFI, post-chat ratings): use the full width so the five answer columns fit. */
 .jspsych-content:has(.jspsych-survey-container) { width: min(960px, 96vw); }
 
+/* Phase 2 TIPI pages: seven answer columns. The survey library gives every table cell at least 120px,
+   which with seven columns put "Agree moderately" and "Agree strongly" off to the side, behind a
+   scrollbar macOS hides (a pilot tester, 2026-11-16, saw five columns). Here the answer columns take
+   only the width their labels need (labels wrap between words, in slightly smaller type) and the
+   table has less padding around it, so all seven fit at laptop widths. Where even this is too wide,
+   experiment.js (fitScaleToPage) shows the library's list layout instead. Wording, values and order
+   are unchanged. */
+.jspsych-content:has(.sd-question[data-name="tipi"]) .sd-body.sd-body--responsive { padding-left: 8px; padding-right: 8px; }
+.sd-question[data-name="tipi"] { --sd-base-padding: 20px; }
+.sd-question[data-name="tipi"]:not(.sd-question--mobile) .sd-table__cell:not(.sd-table__cell--row-text) {
+  min-width: 0; padding-left: 3px; padding-right: 3px; }
+.sd-question[data-name="tipi"]:not(.sd-question--mobile) .sd-table__cell--header { font-size: 14px; line-height: 1.3; }
+
 /* "Stop and leave the study", always under the chat; quieter than the main buttons. */
 .chat-stop-row { text-align: right; margin-top: 8px; }
 .chat-stop { background: none; border: none; color: #555; text-decoration: underline; cursor: pointer; font-size: 14px; padding: 4px; }

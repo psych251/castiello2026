@@ -732,6 +732,158 @@ test.describe("experiment", () => {
     expect(trials.find((x) => x.task === "choice")).toBeUndefined();
   });
 
+  // The TIPI pages as a participant sees them. In the pilot (P2T01, 2026-11-16) a tester saw only
+  // five of the seven columns: the table was wider than the page, and the rest sat off to the side
+  // behind a scrollbar that macOS hides. setSurvey() and toBeVisible() pass either way, so this
+  // test looks at the layout itself. At laptop widths and at browser zoom (zoom narrows the page in
+  // CSS pixels, which is what the smaller sizes below stand for), every column heading and all 70
+  // answer buttons must be on screen, not clipped or covered, with nothing scrolling sideways.
+  // Answers are then given by clicking where a person would (the mouse, at the button's position),
+  // and the saved data must hold the clicked values. TIPI_SCREENSHOTS=<dir> saves both pages at
+  // three of the sizes.
+  test("Phase 2: on both TIPI pages all seven answer columns are on screen and work by clicking, at laptop widths and browser zoom", async ({ page }) => {
+    test.skip(!PAGE_PHASE2, "the page does not have the Phase 2 measures");
+    test.setTimeout(300000);
+    const SIZES = [
+      ["1512x982", 1512, 982], ["1440x900", 1440, 900], ["1366x768", 1366, 768], ["1280x800", 1280, 800],
+      ["1280x800 at 125%", 1024, 640], ["1440x900 at 150%", 960, 600], ["1366x768 at 150%", 911, 512],
+      ["1280x800 at 150%", 853, 533], ["1280x800 at 175%", 731, 457], ["1280x800 at 200%", 640, 400],
+    ];
+    const SHOTS = ["1440x900", "1280x800 at 150%", "1280x800 at 200%"];
+    const labels = Tipi.TIPI_SCALE.map((s) => s.text);
+    const items = Tipi.TIPI_ITEMS.map((i) => ({ id: i.id, text: i.text }));
+    const problems = [];
+    // Everything wrong with the layout as it stands, as sentences (empty = fine).
+    const layoutProblems = () => page.evaluate(({ labels, items }) => {
+      const out = [];
+      const q = document.querySelector('.sd-question[data-name="tipi"]');
+      if (!q) return ["no TIPI question on the page"];
+      for (let a = q; a && a !== document.documentElement; a = a.parentElement) {
+        if (getComputedStyle(a).overflowX !== "visible" && a.scrollWidth > a.clientWidth + 1) {
+          out.push(`${a.className || a.tagName} scrolls sideways (${a.scrollWidth}px of content in ${a.clientWidth}px)`);
+        }
+      }
+      if (document.documentElement.scrollWidth > innerWidth + 1) out.push("the page scrolls sideways");
+      const wide = [...document.querySelectorAll(".jspsych-content *")].filter((e) => e.getBoundingClientRect().right > innerWidth + 1);
+      if (wide.length) out.push("wider than the window: " + wide.slice(0, 4).map((e) => `${e.tagName.toLowerCase()}.${String(e.className).split(" ")[0]} (${Math.round(e.getBoundingClientRect().right)}px)`).join(", "));
+      // Bring an element to the middle of the window by scrolling up or down only, as a person
+      // would; never sideways, which would hide exactly the problem this test looks for.
+      const toMiddle = (el) => {
+        const off = () => el.getBoundingClientRect().top - innerHeight / 2;
+        for (let a = el.parentElement; a; a = a.parentElement) {
+          if (/auto|scroll/.test(getComputedStyle(a).overflowY) && a.scrollHeight > a.clientHeight) a.scrollTop += off();
+        }
+        document.scrollingElement.scrollTop += off();
+      };
+      // Is this element's middle on screen, and is it what a click there would hit?
+      const reachable = (el, owner) => {
+        toMiddle(el);
+        const r = el.getBoundingClientRect();
+        const x = r.left + r.width / 2, y = r.top + r.height / 2;
+        if (r.width < 1 || r.height < 1) return "has no size";
+        if (r.left < 0 || r.right > innerWidth) return `is off screen sideways (${Math.round(r.left)}-${Math.round(r.right)} of ${innerWidth}px)`;
+        const hit = document.elementFromPoint(x, y);
+        return hit && owner.contains(hit) ? null : "is clipped or covered";
+      };
+      const mobile = q.classList.contains("sd-question--mobile");
+      if (!mobile) {
+        const heads = [...q.querySelectorAll("thead th")].filter((th) => th.textContent.trim());
+        if (JSON.stringify(heads.map((th) => th.textContent.trim())) !== JSON.stringify(labels)) out.push("column headings are not the seven TIPI labels: " + heads.map((th) => th.textContent.trim()).join(" | "));
+        for (const th of heads) {
+          const p = reachable(th, th);
+          if (p) out.push(`heading "${th.textContent.trim()}" ${p}`);
+          if (th.scrollWidth > th.clientWidth + 1) out.push(`heading "${th.textContent.trim()}" overflows its column`);
+        }
+      }
+      const rows = [...q.querySelectorAll("tbody tr")].filter((tr) => tr.querySelector('input[type="radio"]'));
+      if (rows.length !== items.length) out.push(`${rows.length} rows with answer buttons, not ${items.length}`);
+      rows.forEach((tr, i) => {
+        const title = tr.querySelector(".sd-table__cell--row-text") || tr.firstElementChild;
+        if (!title.textContent.includes(items[i].text)) out.push(`row ${i + 1} is not "${items[i].text}"`);
+        const radios = [...tr.querySelectorAll('input[type="radio"]')];
+        if (radios.map((r) => r.value).join() !== "1,2,3,4,5,6,7") out.push(`row ${i + 1} values are ${radios.map((r) => r.value).join()}`);
+        for (const r of radios) {
+          const label = r.closest("label");
+          const p = reachable(label.querySelector(".sd-item__decorator") || label, label);
+          if (p) out.push(`row ${i + 1} option ${r.value} ${p}`);
+          if (mobile && !label.textContent.includes(labels[Number(r.value) - 1])) out.push(`row ${i + 1} option ${r.value} has no label`);
+        }
+      });
+      return out;
+    }, { labels, items });
+    // A click where a person would click: the mouse at the button's position, never a scripted value.
+    const clickAnswer = async (where, itemId, value) => {
+      const at = await page.evaluate(({ text, value }) => {
+        const q = document.querySelector('.sd-question[data-name="tipi"]');
+        const tr = [...q.querySelectorAll("tbody tr")].find((t) => t.querySelector('input[type="radio"]') && t.textContent.includes(text));
+        const label = tr.querySelector(`input[type="radio"][value="${value}"]`).closest("label");
+        const button = label.querySelector(".sd-item__decorator") || label;
+        const off = () => button.getBoundingClientRect().top - innerHeight / 2; // up or down only
+        for (let a = button.parentElement; a; a = a.parentElement) {
+          if (/auto|scroll/.test(getComputedStyle(a).overflowY) && a.scrollHeight > a.clientHeight) a.scrollTop += off();
+        }
+        document.scrollingElement.scrollTop += off();
+        const r = button.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      }, { text: items.find((i) => i.id === itemId).text, value });
+      await page.mouse.click(at.x, at.y);
+      const got = await page.evaluate((id) => (window.__survey.getValue("tipi") || {})[id], itemId);
+      if (got !== value) problems.push(`${where}: clicking option ${value} in ${itemId} gave ${got}`);
+    };
+
+    await page.goto(url("order=mirror-first&mirror_name=Alex"));
+    await page.waitForFunction(() => window.__saver && window.__saver.docId);
+    const docId = await page.evaluate(() => window.__saver.docId);
+    await page.getByRole("button", { name: "I agree to participate" }).click();
+    await setSurvey(page, { bfi: bfiAnswers() });
+    await page.locator('input[value="Continue"]').click();
+    await page.locator("#jspsych-instructions-next").click();
+    await chat(page, 1);
+    await chat(page, 2);
+    await setSurvey(page, AFF);
+    await page.locator('input[value="Continue"]').click();
+
+    // Every value 1-7 is clicked; 6 ("Agree moderately") and 7 ("Agree strongly") several times.
+    const FINAL = { chat1: [1, 2, 3, 4, 5, 6, 7, 6, 7, 6], chat2: [7, 6, 7, 6, 5, 4, 3, 2, 1, 7] };
+    for (const [chat, which, name, finalSize] of [["chat1", "first", "Alex", "1280x800 at 150%"], ["chat2", "second", "Pat", "1280x800 at 200%"]]) {
+      await expect(page.getByText(`${which} chat partner`)).toBeVisible();
+      await expect(page.locator(".sd-question__title").filter({ hasText: `I see ${name} as:` })).toBeVisible();
+      for (const [k, [size, width, height]] of SIZES.entries()) {
+        await page.setViewportSize({ width, height });
+        await page.waitForTimeout(150); // let the survey re-lay itself out
+        for (const p of await layoutProblems()) problems.push(`${chat}, ${size}: ${p}`);
+        const list = await page.evaluate(() => document.querySelector('.sd-question[data-name="tipi"]').classList.contains("sd-question--mobile"));
+        console.log(`TIPI ${chat} at ${size}: ${list ? "list" : "table"} layout`);
+        if (process.env.TIPI_SCREENSHOTS && SHOTS.includes(size)) {
+          // The page's content at this width, whole: a window as tall as the content.
+          const tall = await page.evaluate(() => document.querySelector(".jspsych-content").getBoundingClientRect().height);
+          await page.setViewportSize({ width, height: Math.ceil(tall) + 200 });
+          await page.waitForTimeout(150);
+          await page.locator(".jspsych-content").screenshot({ path: path.join(process.env.TIPI_SCREENSHOTS, `tipi-${chat}-${width}px.png`) });
+          await page.setViewportSize({ width, height });
+          await page.waitForTimeout(150);
+        }
+        // Clicks on "Agree moderately" and "Agree strongly", in a different row at each size.
+        await clickAnswer(`${chat}, ${size}`, items[k % 10].id, 6);
+        await clickAnswer(`${chat}, ${size}`, items[(k + 5) % 10].id, 7);
+      }
+      const finalSpec = SIZES.find((s) => s[0] === finalSize);
+      await page.setViewportSize({ width: finalSpec[1], height: finalSpec[2] });
+      await page.waitForTimeout(150);
+      for (const [i, item] of items.entries()) await clickAnswer(`${chat}, ${finalSize}`, item.id, FINAL[chat][i]);
+      expect(problems, problems.join("\n")).toEqual([]);
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.locator('input[value="Continue"]').click();
+    }
+    await expect(page.getByText(Tipi.CHOICE_QUESTION)).toBeVisible();
+    // The saved rows hold exactly the clicked values, in the database too.
+    await page.evaluate(() => window.__saver._settle());
+    const saved = (await trialsOf(docId)).filter((t) => t.task === "tipi");
+    expect(saved.map((t) => [t.chat_index, t.bot_name, t.tipi_n_items])).toEqual([[1, "Alex", 10], [2, "Pat", 10]]);
+    expect(saved[0].tipi_raw).toEqual(tipiAnswers(FINAL.chat1));
+    expect(saved[1].tipi_raw).toEqual(tipiAnswers(FINAL.chat2));
+  });
+
   // The stopping rule counts the primary outcome (ratings submitted), never Finish or the extension
   // measures: leaving at the forced choice keeps a session in the count and in the affiliation
   // analysis, with complete TIPI rows and no choice. PHASE2_EXPORT_SAMPLE=<dir> keeps this export's

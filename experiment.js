@@ -383,6 +383,41 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
     no = survey.addNavigationItem({ id: "withdraw_no", title: "Keep going", visible: false, action: () => confirming(false) });
   }
 
+  // A rating table must show every answer column. The survey library sizes table columns for its own
+  // defaults; a table wider than its box scrolls sideways, and the scrollbar can be hidden (macOS),
+  // so the last columns are simply not seen. A Phase 2 pilot tester (2026-11-16) saw five of the
+  // TIPI's seven. src/experiment.css draws the TIPI table compact; when even that is wider than the
+  // box (a narrow window or high browser zoom), the question switches to the library's own list
+  // layout (each statement with all of its answers, labelled, beneath it), and back when the window
+  // widens. The question, answers, values and order are the same in both layouts.
+  function fitScaleToPage(survey, name) {
+    const q = survey.getQuestionByName(name);
+    let listBelow = null; // the window width at which the table last did not fit
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      // Two frames: the table is drawn, then measured.
+      frame = requestAnimationFrame(() => requestAnimationFrame(() => {
+        const el = document.querySelector(`.sd-question[data-name="${name}"]`);
+        if (el && q.displayMode === "table" && el.scrollWidth > el.clientWidth + 1) {
+          listBelow = window.innerWidth;
+          q.displayMode = "list";
+        }
+      }));
+    };
+    const onResize = () => {
+      if (q.displayMode === "list" && window.innerWidth > listBelow) q.displayMode = "table";
+      measure();
+    };
+    q.displayMode = "table";
+    let rendered = false;
+    survey.onAfterRenderQuestion.add((sender, options) => {
+      if (options.question === q && !rendered) { rendered = true; measure(); }
+    });
+    window.addEventListener("resize", onResize);
+    survey.onComplete.add(() => window.removeEventListener("resize", onResize));
+  }
+
   // -------------------------------------------------------------------------
   // 1. Consent (course-wide IRB text; edit only the contact address)
   // Main study (2026-10-30, the student's decision): the course text's "You may decline to answer
@@ -673,6 +708,9 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
     return {
       timeline: [{
         type: jsPsychSurvey,
+        // The plugin's default minimum, min(100vw, 800px), is wider than the page column below 800px
+        // and made the page scroll sideways at high zoom; the column's own width is used instead.
+        min_width: "0px",
         survey_json: {
           showQuestionNumbers: "off",
           widthMode: "responsive",
@@ -703,6 +741,7 @@ if (USE_EMULATOR && URL_PARAMS.get("test_suspended") === "1") EXPERIMENT.suspend
         survey_function: (survey) => {
           window.__survey = survey;
           if (EXPERIMENT.require_all_items) offerWithdrawal(survey, "tipi");
+          fitScaleToPage(survey, "tipi");
         },
         on_start: (trial) => {
           trial.survey_json = JSON.parse(JSON.stringify(trial.survey_json).replace(/\{BOT\}/g, botName(index)));
